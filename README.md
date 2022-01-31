@@ -1,58 +1,71 @@
-
-# Welcome to your CDK Python project!
-
-This is a blank project for Python development with CDK.
-
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
-
-This project is set up like a standard Python project.  The initialization
-process also creates a virtualenv within this project, stored under the `.venv`
-directory.  To create the virtualenv it assumes that there is a `python3`
-(or `python` for Windows) executable in your path with access to the `venv`
-package. If for any reason the automatic creation of the virtualenv fails,
-you can create the virtualenv manually.
-
-To manually create a virtualenv on MacOS and Linux:
-
+# Deploy Lambda Based APIs by CDK 
+**29 JAN 2022 Hai Tran**
+## 1. Deploy a lambda function by files 
+install dependencies 
 ```
-$ python3 -m venv .venv
+python -m pip install --target path-to-lambda numpy 
 ```
-
-After the init process completes and the virtualenv is created, you can use the following
-step to activate your virtualenv.
-
+aws_lambda.Function 
 ```
-$ source .venv/bin/activate
+handler_file = aws_lambda.Function(
+            self,
+            id="lambda-handler-wo-dependencies",
+            code=aws_lambda.Code.from_asset(path.join(dirname, "lambda")),
+            handler="handler.handler_file",
+            runtime=aws_lambda.Runtime.PYTHON_3_8,
+            memory_size=512,
+            timeout=Duration.seconds(90)
+        )
 ```
-
-If you are a Windows platform, you would activate the virtualenv like this:
-
+## 2. Deploy a lambda function by ecr image 
+project structure 
 ```
-% .venv\Scripts\activate.bat
+- aws_devops
+    - lambda
+        - Dockerfile
+        - .dockerignore
+        - handler.py
+        - requirements.txt
+     -aws_devops_stack.py
 ```
-
-Once the virtualenv is activated, you can install the required dependencies.
-
 ```
-$ pip install -r requirements.txt
+handler_ecr = aws_lambda.Function(
+            self,
+            id="lambda-ecr-build-local",
+            code=aws_lambda.EcrImageCode.from_asset_image(
+                directory=path.join(dirname, "lambda")
+            ),
+            handler=aws_lambda.Handler.FROM_IMAGE,
+            runtime=aws_lambda.Runtime.FROM_IMAGE,
+            memory_size=512,
+            timeout=Duration.seconds(90)
+        )
 ```
-
-At this point you can now synthesize the CloudFormation template for this code.
-
+## 3. Integrate an API Gateway with multiple lambdas
+create an api gateway 
 ```
-$ cdk synth
+api_gw = aws_apigateway.RestApi(
+            self,
+            id="ApiGatewayLambdaDeployOptions",
+            rest_api_name="api-lambda-deploy-options"
+        )
 ```
-
-To add additional dependencies, for example other CDK libraries, just add
-them to your `setup.py` file and rerun the `pip install -r requirements.txt`
-command.
-
-## Useful commands
-
- * `cdk ls`          list all stacks in the app
- * `cdk synth`       emits the synthesized CloudFormation template
- * `cdk deploy`      deploy this stack to your default AWS account/region
- * `cdk diff`        compare deployed stack with current state
- * `cdk docs`        open CDK documentation
-
-Enjoy!
+create api resource 
+```
+api_file_resource = api_gw.root.add_resource(
+            path_part="file"
+        )
+```
+create lambda integration
+```
+ api_file_intetgration = aws_apigateway.LambdaIntegration(
+            handler=handler_file
+        )
+```
+add method to the resource 
+```
+ api_file_resource.add_method(
+            http_method="GET",
+            integration=api_file_intetgration
+        )
+```
