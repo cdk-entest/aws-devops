@@ -1,9 +1,15 @@
 """
-CDK deploy lambda
+CDK deploy lambda 
+29 JAN 2022 Hai Tran 
 Option 1. handler without dependencies
 Option 2. handler with dependencies
 Option 3. existing ecr image
 Option 3. build ecg image from local asset
+Integration multiple lambdas function with an api gateway. 
+- create an api gateway api_gw = aws_apigateway.RestApi()
+- create api resource by resource = api_gw.root.add_resource()
+- create lambda integration api_integration = aws_apigateway.LambdaIntegration()
+- add method to resource by resource.add_method(http_method, api_integration) 
 """
 
 
