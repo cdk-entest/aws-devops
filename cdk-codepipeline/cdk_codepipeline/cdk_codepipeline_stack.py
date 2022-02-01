@@ -33,7 +33,7 @@ class CdkCodepipelineStack(Stack):
         pipeline = pipelines.CodePipeline(
             self,
             'Pipeline',
-            pipeline_name='CdkCodepipelineStack',
+            pipeline_name='CdkCodepipelineDemo',
             synth=pipelines.ShellStep(
                 'Synth',
                 input=pipelines.CodePipelineSource.connection(
