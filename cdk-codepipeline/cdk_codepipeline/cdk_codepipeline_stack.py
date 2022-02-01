@@ -47,13 +47,13 @@ class CdkCodepipelineStack(Stack):
             )
         )
         # pre-product stage: add application stage which is a Lambda API
-        pre_pro_stage = LambdaApiStage(
-            self,
-            "pre-prod"
-        )
-        pipeline.add_stage(
-            pre_pro_stage
-        )
+        # pre_pro_stage = LambdaApiStage(
+        #     self,
+        #     "pre-prod"
+        # )
+        # pipeline.add_stage(
+        #     pre_pro_stage
+        # )
         # product stage with manual approval required
         # aws_cdk.pipelines.CodePipeline does not support SNS topic email here yet
         # need back to conventional aws_cdk.aws_codepipeline
