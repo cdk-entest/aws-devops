@@ -48,3 +48,8 @@ Outputs:
   LambdaFunctionName:
     Value:
       Ref: LambdaFunctionDemo
+  LamdaFunctionArn:
+    Value:
+      Fn::GetAtt:
+        - LambdaFunctionDemo
+        - Arn
