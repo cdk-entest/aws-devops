@@ -118,7 +118,7 @@ Resources:
               OutputArtifacts:
                 - Name: CloneOutput
               Configuration:
-                BranchName: master
+                BranchName: main
                 RepositoryName: !GetAtt Repository.Name
               RunOrder: 1
         - Name: Build
