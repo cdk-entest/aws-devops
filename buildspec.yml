@@ -10,6 +10,9 @@ phases:
     commands:
       - aws cloudformation validate-template --template-body file://core.yaml
       - cfn-lint core.yaml
+      - aws cloudformation deploy --template-file core.yaml --stack-name core-tmp --capabilities CAPABILITY_NAMED_IAM --role-arn $CFN_ROLE
+    finally: aws cloudformation delete-stack --stack-name core-tmp --role-arn $CFN_ROLE
+
 artifacts:
   files:
     - core.yaml

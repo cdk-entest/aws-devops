@@ -14,12 +14,15 @@ Resources:
               - "sts:AssumeRole"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AdministratorAccess"
+
   Repository:
     Type: AWS::CodeCommit::Repository
     Properties:
       RepositoryName: core
+
   TemplateBucket:
     Type: AWS::S3::Bucket
+
   BuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -56,6 +59,7 @@ Resources:
                   - "ec2:Describe*"
                 Resource: "*"
           PolicyName: BuildPolicy
+
   Build:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -69,6 +73,11 @@ Resources:
         Type: LINUX_CONTAINER
         Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
         ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: CFN_ROLE
+            Type: PLAINTEXT
+            Value: !GetAtt CfnRole.Arn
+
   PipelineRole:
     Type: "AWS::IAM::Role"
     Properties:
