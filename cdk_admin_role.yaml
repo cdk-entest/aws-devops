@@ -14,3 +14,14 @@ Resources:
               - "sts:AssumeRole"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AdministratorAccess"
+      Policies:
+        - PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: CdkAdminPassRole
+                Effect: Allow
+                Action:
+                  - "iam:PassRole"
+                  - "iam:GetRole"
+                Resource: "*"
+          PolicyName: PassRolePolicy
