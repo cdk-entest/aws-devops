@@ -1,14 +1,17 @@
 aws cloudformation create-stack \
- --stack-name cfn-codepipeline-demo \
- --template-body file://cicd.yaml \
- --capabilities CAPABILITY_NAMED_IAM
+ --stack-name ec2-stack-demo \
+ --template-body file://ec2.yaml \
+ --parameters ParameterKey=KeyName,ParameterValue=mac_os_jenkins_builder \
+ --capabilities CAPABILITY_NAMED_IAM \
+ --profile hai
 
 
 aws cloudformation update-stack \
  --stack-name cfn-codepipeline-demo \
- --template-body file://cicd.yaml \
+ --template-body file://ec2.yaml \
  --capabilities CAPABILITY_NAMED_IAM
 
 
 aws cloudformation delete-stack \
-  --stack-name cfn-lcodepipeline-demo
+  --stack-name ec2-stack-demo \
+  --profile hai

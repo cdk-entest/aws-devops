@@ -8,6 +8,7 @@ Parameters:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
     Type: AWS::EC2::KeyPair::KeyName
     ConstraintDescription: must be the name of an existing EC2 KeyPair
+    Default: mac_os_jenkins_builder
   InstanceType:
     Description: WebServer EC2 instance type
     Type: String
@@ -20,7 +21,6 @@ Parameters:
     MinLength: 9
     MaxLength: 18
     Default: 0.0.0.0/0
-    ConstraintDescription: must be a valid IP CIDR range from x.x.x.x/x
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
@@ -46,3 +46,12 @@ Outputs:
   InstanceId:
     Description: InstanceId of the newly created EC2 instance
     Value: !Ref "EC2Instance"
+  AZ:
+    Description: AZ of newly created EC2 instance
+    Value: !GetAtt [EC2Instance, AvailabilityZone]
+  PublicDNS:
+    Description: public DNSName of the newly created EC2 instance
+    Value: !GetAtt [EC2Instance, PublicDnsName]
+  PublicIP:
+    Description: Public IP address of the newly creaetd EC2 instance
+    Value: !GetAtt [EC2Instance, PublicIp]
