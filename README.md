@@ -18,7 +18,7 @@ Just a basic API by using AWS API Gateway and a lambda function. Some note
 ![codepipeline_sample drawio](https://user-images.githubusercontent.com/20411077/153315728-81a090a1-ddee-4626-81ec-d14620c09f08.png)
 
 
-## Create the Pipeline by AWS CDK
+## Option 1. Create the Pipeline by AWS CDK
 #### CDK project <br/>
 ```
 cdk init --language python 
@@ -233,4 +233,229 @@ class CdkCodepipelineStack(Stack):
                 )
             ]
         )
+```
+
+## Option 2. Create CI/CD Pipeline with CloudFormation
+#### CI/CD pipeline 
+It is x10 complicated to setup for a simple production, esp, roles and policies attached to CodeBuild, CodePipeline
+```
+AWSTemplateFormatVersion: 2010-09-09
+Description: "CI CD pipeline"
+Resources:
+  CfnRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "cloudformation.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
+
+  Repository:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: core
+
+  TemplateBucket:
+    Type: AWS::S3::Bucket
+
+  BuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AllowAssumeRole
+            Effect: Allow
+            Principal:
+              Service: "codebuild.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: CodeBuild
+                Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                  - "codecommit:GitPull"
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                  - "s3:PutObject"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:BatchGetImage"
+                  - "ecr:GetAuthorizationToken"
+                  - "s3:GetBucketAcl"
+                  - "s3:GetBucketLocation"
+                  - "cloudformation:*"
+                  - "iam:PassRole"
+                  - "ec2:Describe*"
+                Resource: "*"
+          PolicyName: BuildPolicy
+
+  Build:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      ServiceRole: !GetAtt BuildRole.Arn
+      Name: Core
+      Source:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: CFN_ROLE
+            Type: PLAINTEXT
+            Value: !GetAtt CfnRole.Arn
+
+  PipelineRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: "codepipeline.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: CodePipeline
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codecommit:CancelUploadArchive"
+                  - "codecommit:GetBranch"
+                  - "codecommit:GetCommit"
+                  - "codecommit:GetUploadArchiveStatus"
+                  - "codecommit:UploadArchive"
+                  - "codebuild:BatchGetBuilds"
+                  - "codebuild:StartBuild"
+                  - "cloudwatch:*"
+                  - "cloudformation:*"
+                  - "s3:*"
+                  - "iam:PassRole"
+                Resource: "*"
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      RoleArn: !GetAtt PipelineRole.Arn
+      ArtifactStore:
+        Location: !Ref TemplateBucket
+        Type: S3
+      Name: CfnCodePipelineDemo
+      Stages:
+        - Name: clone
+          Actions:
+            - ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: "1"
+              Name: clone
+              OutputArtifacts:
+                - Name: CloneOutput
+              Configuration:
+                BranchName: main
+                RepositoryName: !GetAtt Repository.Name
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: Build
+              InputArtifacts:
+                - Name: CloneOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              OutputArtifacts:
+                - Name: BuildOutput
+              Configuration:
+                ProjectName: !Ref Build
+              RunOrder: 1
+        - Name: Deploy
+          Actions:
+            - Name: Deploy
+              InputArtifacts:
+                - Name: BuildOutput
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: "1"
+                Provider: CloudFormation
+              OutputArtifacts:
+                - Name: DeployOutput
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                RoleArn: !GetAtt CfnRole.Arn
+                Capabilities: CAPABILITY_NAMED_IAM
+                StackName: Core
+                TemplatePath: BuildOutput::core.yaml
+```
+
+#### Simple API lambda CloudFormation template 
+In here, need to add much more compliated roles/policies for Lambd, S3, API Gateway, and add CloudWatch to monitor
+```
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Lambda function with cfn-response."
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CfnLambdaRoleDemo
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLambdaExecute
+
+  LambdaFunctionDemo:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CfnCodePipelineLambdaDemo
+      Handler: "index.handler"
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+            return {
+              "statusCode": 200,
+              "body": json.dumps({"message": "Hello lambda cloudformation"})
+            }
+      Runtime: python3.8
+      MemorySize: 512
+      Timeout: 90
+      Role:
+        Fn::GetAtt:
+          - LambdaRole
+          - Arn
+Outputs:
+  LambdaRoleArn:
+    Description: Role for lambda execution
+    Value:
+      Fn::GetAtt:
+        - LambdaRole
+        - Arn
+  LambdaFunctionName:
+    Value:
+      Ref: LambdaFunctionDemo
 ```
