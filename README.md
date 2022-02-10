@@ -19,14 +19,16 @@ Just a basic API by using AWS API Gateway and a lambda function. Some note
 
 
 ## Create the Pipeline by AWS CDK
-- CDK project <br/>
+#### CDK project <br/>
 ```
 cdk init --language python 
 ```
-project structure, it is noted that the CodeBuild container will clone the repository, then app.py should see things when running cdk synth and cdk deploy. 
+#### project structure
+It is noted that the CodeBuild container will clone the repository, then app.py should see things when running cdk synth and cdk deploy. 
 ```
 cdk_codepipeline
     lambda
+        signal-processing-ip
         handler.py
         Dockerfile
     cdk_codepipelin_stack.py
@@ -36,7 +38,7 @@ app.py
 requirements.txt 
 cdk.json
 ```
-- GitHub AWS connection <br/>
+#### GitHub AWS connection 
 To connect GitHub with AWS follow this [reference](https://docs.aws.amazon.com/dtconsole/latest/userguide/connections-create-github.html). This needs two step 1) install AWS connector app into GitHub and 2) create a connection arn in AWS console. Then this is the aws_cdk.pipelines.CodePipeline
 ```
 pipeline = pipelines.CodePipeline(
@@ -57,8 +59,7 @@ pipeline = pipelines.CodePipeline(
         )
 ``` 
 
-## Stacks 
-Lambda API stack 
+#### Lambda API stack 
 ```
 class LambdaApiStack(Stack):
 
@@ -86,7 +87,7 @@ class LambdaApiStack(Stack):
             value=gw.url)
 
 ```
-Lambda API stage 
+#### Lambda API stage 
 ```
 class LambdaApiStage(Stage):
   def __init__(self, scope: Construct, id: str, **kwargs):
@@ -96,7 +97,7 @@ class LambdaApiStage(Stage):
 
     self.url_output = service.url_output
 ```
-CDK CodePipeline stack 
+#### CDK CodePipeline stack 
 ```
 pipeline = pipelines.CodePipeline(
             self,
