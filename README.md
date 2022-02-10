@@ -1,6 +1,24 @@
 # CDK CodePipeline for Lambda API 
 
-## Setup
+## Architecture
+#### Configuration
+Just a basic API by using AWS API Gateway and a lambda function. Some note
+- API Gateway timeout 29 seconds
+- lambda function needs an IAM policy to access S3 bucket 
+- S3 bucket can be attached policies to protect and enable cross-account access <br/>
+#### To do
+- Add token API Gateway 
+- Monitor, log the API requests by CloudWatch, X-Ray? [reference](https://docs.aws.amazon.com/apigateway/latest/developerguide/security-monitoring.html)
+- Protect API Gateway (AWF, Shield) [reference](https://aws.amazon.com/blogs/compute/amazon-api-gateway-adds-support-for-aws-waf/)
+![lambda_api (1)](https://user-images.githubusercontent.com/20411077/153315852-3a2bb76e-eb96-4dc1-b1e3-1a6befc7ee5b.png)
+<br/>
+
+## CI/CD CodePipeline
+
+![codepipeline_sample drawio](https://user-images.githubusercontent.com/20411077/153315728-81a090a1-ddee-4626-81ec-d14620c09f08.png)
+
+
+## Create the Pipeline by AWS CDK
 - CDK project <br/>
 ```
 cdk init --language python 
