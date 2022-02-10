@@ -41,16 +41,28 @@ cdk.json
 #### GitHub AWS connection 
 To connect GitHub with AWS follow this [reference](https://docs.aws.amazon.com/dtconsole/latest/userguide/connections-create-github.html). This needs two step 1) install AWS connector app into GitHub and 2) create a connection arn in AWS console. Then this is the aws_cdk.pipelines.CodePipeline
 ```
-pipeline = pipelines.CodePipeline(
+class CdkCodepipelineStack(Stack):
+    """
+    Create a aws_cdk.pipelines.CodePipeline stack to
+    continuously deploy a Lambda based API, and the
+    Lambda is loaded from an ecr image. In addition, the
+    ecr image is built from local asset code and push to
+    a ecr repository.
+    """
+
+    def __init__(self, scope: Construct, id: str, **kwargs):
+        super().__init__(scope, id, **kwargs)
+        # source is S3, GitHub, BitBucket, AWS CodeCommit
+        pipeline = pipelines.CodePipeline(
             self,
             'Pipeline',
-            pipeline_name='CdkCodepipelineStack',
+            pipeline_name='CdkCodepipelineDemo',
             synth=pipelines.ShellStep(
                 'Synth',
                 input=pipelines.CodePipelineSource.connection(
                     repo_string="entest-hai/aws-devops",
                     branch="cdk-codepipeline",
-                    connection_arn=""
+                    connection_arn="arn:aws:codestar-connections"
                 ),
                 commands=["pip install -r requirements.txt",
                           "npm install -g aws-cdk",
@@ -61,6 +73,16 @@ pipeline = pipelines.CodePipeline(
 
 #### Lambda API stack 
 ```
+from os import path
+from constructs import Construct
+from aws_cdk import (
+    Stack,
+    CfnOutput,
+    Duration,
+    aws_apigateway,
+    aws_lambda
+)
+
 class LambdaApiStack(Stack):
 
     def __init__(self, scope: Construct, id: str, **kwargs) -> None:
@@ -68,38 +90,111 @@ class LambdaApiStack(Stack):
         # The code that defines your stack goes here
         this_dir = path.dirname(__file__)
 
-        # lambda from code
-        handler = aws_lambda.Function(
-            self, 'Handler',
+        # option 1. lambda handler without dependencies
+        handler_file = aws_lambda.Function(
+            self,
+            id="lambda-handler-wo-dependencies",
+            code=aws_lambda.Code.from_asset(path.join(dirname, "lambda")),
+            handler="handler.handler_file",
             runtime=aws_lambda.Runtime.PYTHON_3_8,
-            handler='handler.handler',
-            code=aws_lambda.Code.from_asset(path.join(this_dir, 'lambda')),
+            memory_size=512,
+            timeout=Duration.seconds(90)
+        )
+        # option 2
+        # python -m pip install --target /lambda/ numpy
+        handler_ecr = aws_lambda.Function(
+            self,
+            id="lambda-ecr-build-local",
+            code=aws_lambda.EcrImageCode.from_asset_image(
+                directory=path.join(dirname, "lambda")
+            ),
+            handler=aws_lambda.Handler.FROM_IMAGE,
+            runtime=aws_lambda.Runtime.FROM_IMAGE,
+            memory_size=512,
             timeout=Duration.seconds(90)
         )
 
-        # create an api gateway integration
-        gw = aws_apigateway.LambdaRestApi(self, 'Gateway',
-            description='Endpoint for a simple Lambda-powered web service',
-            handler=handler)
-
-        # get api endpoint url
-        self.url_output = CfnOutput(self, 'Url',
-            value=gw.url)
+        # create an api gateway
+        api_gw = aws_apigateway.RestApi(
+            self,
+            id="ApiGatewayLambdaDeployOptions",
+            rest_api_name="api-lambda-deploy-options"
+        )
+        # integrate lambda-file with api gateway
+        # create api resource for lambbda-file
+        api_file_resource = api_gw.root.add_resource(
+            path_part="file"
+        )
+        # lambad integration with api file
+        api_file_intetgration = aws_apigateway.LambdaIntegration(
+            handler=handler_file
+        )
+        # add method to the api file resource
+        api_file_resource.add_method(
+            http_method="GET",
+            integration=api_file_intetgration
+        )
+        # integrate lambda-ecr with api gateway
+        # create api resource for lambda-ecr
+        api_ecr_resource = api_gw.root.add_resource(
+            path_part="ecr"
+        )
+        # lambda integration with api ecr
+        api_ecr_integration = aws_apigateway.LambdaIntegration(
+            handler=handler_ecr
+        )
+        # add method to the api ecr resource
+        api_ecr_resource.add_method(
+            http_method="GET",
+            integration=api_ecr_integration
+        )
+        # get api url
+        self.output_url = CfnOutput(self, id="Url", value=api_gw.url)
 
 ```
 #### Lambda API stage 
 ```
+from constructs import Construct
+from aws_cdk import (
+  Stage
+)
+
+from .lambda_api_stack import LambdaApiStack
+
 class LambdaApiStage(Stage):
   def __init__(self, scope: Construct, id: str, **kwargs):
     super().__init__(scope, id, **kwargs)
 
     service = LambdaApiStack(self, 'LambdaApiStack')
 
-    self.url_output = service.url_output
+    self.url_output = service.
 ```
 #### CDK CodePipeline stack 
 ```
-pipeline = pipelines.CodePipeline(
+from aws_cdk import (
+    aws_codecommit,
+    pipelines,
+    Stack
+)
+from constructs import Construct
+from .lamda_api_stage import LambdaApiStage
+
+class CdkCodepipelineStack(Stack):
+    """
+    Create a aws_cdk.pipelines.CodePipeline stack to
+    continuously deploy a Lambda based API, and the
+    Lambda is loaded from an ecr image. In addition, the
+    ecr image is built from local asset code and push to
+    a ecr repository.
+    """
+
+    def __init__(self, scope: Construct, id: str, **kwargs):
+        super().__init__(scope, id, **kwargs)
+        # create a cdk pipeline
+        # synth is to synthesis cdk.out which is CloudFormation template for infrastructure
+        # and run commands pip, cdk synth
+        # source is S3, GitHub, BitBucket, AWS CodeCommit
+        pipeline = pipelines.CodePipeline(
             self,
             'Pipeline',
             pipeline_name='CdkCodepipelineDemo',
@@ -108,11 +203,34 @@ pipeline = pipelines.CodePipeline(
                 input=pipelines.CodePipelineSource.connection(
                     repo_string="entest-hai/aws-devops",
                     branch="cdk-codepipeline",
-                    connection_arn=""
+                    connection_arn="arn:aws:codestar-connections"
                 ),
                 commands=["pip install -r requirements.txt",
                           "npm install -g aws-cdk",
                           "cdk synth"]
             )
+        )
+        # pre-product stage: add application stage which is a Lambda API
+        # pre_pro_stage = LambdaApiStage(
+        #     self,
+        #     "pre-prod"
+        # )
+        # pipeline.add_stage(
+        #     pre_pro_stage
+        # )
+        # product stage with manual approval required
+        # aws_cdk.pipelines.CodePipeline does not support SNS topic email here yet
+        # need back to conventional aws_cdk.aws_codepipeline
+        pipeline.add_stage(
+            LambdaApiStage(
+                self,
+                "prod"
+            ),
+            pre=[
+                pipelines.ManualApprovalStep(
+                    id="PromotedToProduct",
+                    comment="Please review and approve it to product level"
+                )
+            ]
         )
 ```
