@@ -15,3 +15,14 @@ aws cloudformation update-stack \
 aws cloudformation delete-stack \
   --stack-name ec2-stack-demo \
   --profile hai
+
+# s3 bucket for static web deletion retain 
+aws cloudformation create-stack \
+ --stack-name ec2-stack-demo \
+ --template-body file://s3_static_web_deleteion_retain.yaml \
+ --capabilities CAPABILITY_NAMED_IAM \
+
+aws cloudformation update-stack \
+ --stack-name ec2-stack-demo \
+ --template-body file://s3_static_web_deleteion_retain.yaml \
+ --capabilities CAPABILITY_NAMED_IAM \
