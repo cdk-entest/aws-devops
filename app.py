@@ -7,9 +7,9 @@ from aws_devops.aws_devops_stack import AwsDevopsStack
 
 
 app = cdk.App()
-AwsDevopsStack(app, "AwsDevopsStack",
+AwsDevopsStack(app, "AwsDevopsStackAssumeRole",
                synthesizer=cdk.DefaultStackSynthesizer(
-                   deploy_role_arn="arn:aws:iam::610770234379:role/cdk-admin-role-CdkAdminRole-1IBORD9375GQF"
+                   deploy_role_arn=""
                )
                # If you don't specify 'env', this stack will be environment-agnostic.
                # Account/Region-dependent features and context lookups will not work,
@@ -23,7 +23,8 @@ AwsDevopsStack(app, "AwsDevopsStack",
                # Uncomment the next line if you know exactly what Account and Region you
                # want to deploy the stack to. */
 
-               #env=cdk.Environment(account='123456789012', region='us-east-1'),
+               #    env=cdk.Environment(account='610770234379',
+               #                        region='ap-southeast-1'),
 
                # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
                )
