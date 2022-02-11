@@ -14,7 +14,6 @@ Integration multiple lambdas function with an api gateway.
 
 
 from os import path
-from wsgiref import handlers
 from aws_cdk import (
     Stack,
     Duration,
