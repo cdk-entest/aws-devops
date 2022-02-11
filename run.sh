@@ -33,7 +33,12 @@ aws cloudformation delete-stack \
 # auto scaling 
 aws cloudformation create-stack \
  --stack-name auto-scaling-cloudformation-demo \
- --template-body file://test.yaml \
+ --template-body file://auto_scaling.yaml \
+ --capabilities CAPABILITY_NAMED_IAM \
+
+aws cloudformation update-stack \
+ --stack-name auto-scaling-cloudformation-demo \
+ --template-body file://auto_scaling.yaml \
  --capabilities CAPABILITY_NAMED_IAM \
 
 aws cloudformation delete-stack \
