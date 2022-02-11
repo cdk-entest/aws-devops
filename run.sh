@@ -29,3 +29,12 @@ aws cloudformation update-stack \
 
 aws cloudformation delete-stack \
  --stack-name ec2-stack-demo
+
+# auto scaling 
+aws cloudformation create-stack \
+ --stack-name auto-scaling-cloudformation-demo \
+ --template-body file://test.yaml \
+ --capabilities CAPABILITY_NAMED_IAM \
+
+aws cloudformation delete-stack \
+ --stack-name auto-scaling-cloudformation-demo
