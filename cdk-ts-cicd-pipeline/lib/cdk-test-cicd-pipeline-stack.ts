@@ -39,7 +39,7 @@ export class CdkTsCicdPipelineStack extends Stack {
     const prodDeploymentRole = aws_iam.Role.fromRoleArn(
       this,
       "ProdDeploymentRole",
-      `arn:aws:iam::549177314273:role/CloudFormationDeploymentRole`, {
+      `arn:aws:iam::product_account_id:role/CloudFormationDeploymentRole`, {
       mutable: false
     }
     )
@@ -48,7 +48,7 @@ export class CdkTsCicdPipelineStack extends Stack {
     const prodCrossAccountRole = aws_iam.Role.fromRoleArn(
       this,
       "ProdCrossAccountRole",
-      `arn:aws:iam::549177314273:role/CdkCodePipelineCrossAcccountRole`, {
+      `arn:aws:iam::product_account_id:role/CdkCodePipelineCrossAcccountRole`, {
       mutable: false
     }
     )
@@ -219,7 +219,7 @@ export class CdkTsCicdPipelineStack extends Stack {
     pipeline.addToRolePolicy(
       new aws_iam.PolicyStatement({
         actions: ['sts:AssumeRole'],
-        resources: ["arn:aws:iam::549177314273:role/*"]
+        resources: ["arn:aws:iam::product_account_id:role/*"]
       }));
 
     // pipeline output 
