@@ -1,8 +1,8 @@
 {
-  "name": "cdk-ts-cicd-pipeline",
+  "name": "cdk-test-cicd-pipeline",
   "version": "0.1.0",
   "bin": {
-    "cdk-ts-cicd-pipeline": "bin/cdk-ts-cicd-pipeline.js"
+    "cdk-test-cicd-pipeline": "bin/cdk-test-cicd-pipeline.js"
   },
   "scripts": {
     "build": "tsc",

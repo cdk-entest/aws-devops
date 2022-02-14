@@ -9,20 +9,24 @@ export interface ApplicationStackProps extends StackProps {
 
 export class ApplicationStack extends Stack {
 
+    // lambad code from 
+    public readonly lambdaCode: aws_lambda.CfnParametersCode;
+
     // constructor
     constructor(app: App, id: string, props: ApplicationStackProps) {
         super(app, id, props);
+
+        // lambda code 
+        this.lambdaCode = aws_lambda.Code.fromCfnParameters();
 
         // create a lambda function 
         const lambda_function = new aws_lambda.Function(
             this,
             `CdkTsLambdaApplicationFunction-${props.stageName}`,
             {
-                runtime: aws_lambda.Runtime.PYTHON_3_8,
-                handler: "handler.handler",
-                code: aws_lambda.Code.fromAsset(
-                    path.join(__dirname, "lambda")
-                ),
+                runtime: aws_lambda.Runtime.NODEJS_12_X,
+                handler: "index.handler",
+                code: this.lambdaCode,
                 environment: {
                     STAGE_NAME: props.stageName
                 }
