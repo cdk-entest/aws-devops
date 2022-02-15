@@ -1,19 +1,23 @@
-# Cross Account CI/CD Pipeline 
-**[reference here](https://aws.amazon.com/blogs/devops/building-a-ci-cd-pipeline-for-cross-account-deployment-of-an-aws-lambda-api-with-the-serverless-framework/)** and **[here](https://catalog.us-east-1.prod.workshops.aws/v2/workshops/00bc829e-fd7c-4204-9da1-faea3cf8bd88/)**
-## Architecture 
+# Cross Account CI/CD Pipeline
+Sometimes we need to run the Pipeline in an account, but deploy product into another account for 
+- Further sepratation between development and production envionment
+- Protect production environment
+- For customer in another account
 
+This note follows the reference workshop here 
+- **[aws-blog-ci-cd-pipeline-cross-account](https://aws.amazon.com/blogs/devops/building-a-ci-cd-pipeline-for-cross-account-deployment-of-an-aws-lambda-api-with-the-serverless-framework/)**
+- **[workshop-ci-cid-pipeline-cross-account](https://catalog.us-east-1.prod.workshops.aws/v2/workshops/00bc829e-fd7c-4204-9da1-faea3cf8bd88/)**
+
+Todo
+- Python CDK version
+- CloudFormation version 
+- Roles and policies created with CloudFormation 
+## Architecture 
 
 ![cross_account_ci_cd_pipeline drawio (1)](https://user-images.githubusercontent.com/20411077/153972206-e9ed989b-78d4-43b8-8a07-48d282375f8d.png)
 
 
-## Connect to AWS CodeCommit by HTTPS
-Goto AWS IAM console and download credential to access AWS CodeCommit 
-```
-git config --global credential.helper '!aws codecommit credential-helper $@'
-git config --global credential.UseHttpPath true
-```
-
-## Create a lambda and a repository stack 
+## Setup CDK project 
 create an empty directory 
 ```
 mkdir cdk-test-cicd-pipeline
@@ -22,6 +26,9 @@ init cdk project
 ```
 cdk init --language=typescript
 ```
+
+## Create a CodeCommit by a repository stack 
+
 create lib/repository-stack.ts
 ```
 import { aws_codecommit } from "aws-cdk-lib";
@@ -39,6 +46,8 @@ export class RepositoryStack extends Stack {
     }
 }
 ```
+
+## Create a lambda stack for testing purpose 
 create lib/lambda-stack.ts 
 ```
 import { Stack, StackProps } from 'aws-cdk-lib';
@@ -65,9 +74,9 @@ export class LambdaStack extends Stack {
     }
 }
 
-
 ```
-update bin/cdk-test-cicd-pipeline.ts
+
+## Build and check CDK generated stacks 
 ```
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -102,7 +111,8 @@ CdkTsLambdaStack
 CdkTsRepositoryStack
 ```
 
-## Add an Inline Policy to the CodePipelineCrossAccountRole with this value
+## Policy CodePipelineCrossAccountRole]
+This allow the ProductionAccount when deploying CloudFormation can access the S3 ArtifactBucket where code for the Lambda function is stored. 
 ```
 {
     "Version": "2012-10-17",
@@ -141,8 +151,9 @@ CdkTsRepositoryStack
     ]
 }
 ```
+## Policy CloudFormationDeploymentRole 
+This allow the CloudFormation in the ProductionAccount can create resources when deploying stacks developed from the develop account. 
 
-## Add an Inline Policy to the CloudFormationDeploymentRole with this value
 ```
 {
     "Version": "2012-10-17",
@@ -211,4 +222,11 @@ CdkTsRepositoryStack
         }
     ]
 }
+```
+
+## Connect to AWS CodeCommit by HTTPS
+Goto AWS IAM console and download credential to access AWS CodeCommit 
+```
+git config --global credential.helper '!aws codecommit credential-helper $@'
+git config --global credential.UseHttpPath true
 ```
