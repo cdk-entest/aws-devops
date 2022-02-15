@@ -110,8 +110,177 @@ CdkTsCicdPipelineStack
 CdkTsLambdaStack
 CdkTsRepositoryStack
 ```
+Deploy a stack and test output 
+```
+cdk deploy CdkTsLambdaStack
+```
 
-## Policy CodePipelineCrossAccountRole]
+## Application Stack 
+This is a smple lambda function with code from local assset folder. The important thing is that 
+- CodeBuild will output DevApplicationStack.template.json in the artifact bucket
+- CodeBuild will output ProdApplicationStack.template.json in the artifact bucket
+- CloudFormation running in the production account need to access the artifact bucket in the dev environment that is why we need roles below. This is the application stack which is a simple lambda api. 
+```
+import { aws_lambda } from "aws-cdk-lib";
+import { aws_apigateway } from "aws-cdk-lib";
+import { App, Stack, StackProps } from "aws-cdk-lib";
+import * as path from "path"
+
+export interface ApplicationStackProps extends StackProps {
+    readonly stageName: string
+}
+
+export class ApplicationStack extends Stack {
+
+    // lambad code from 
+    public readonly lambdaCode: aws_lambda.CfnParametersCode;
+
+    // constructor
+    constructor(app: App, id: string, props: ApplicationStackProps) {
+        super(app, id, props);
+
+        // lambda code 
+        this.lambdaCode = aws_lambda.Code.fromCfnParameters();
+
+        // create a lambda function 
+        const lambda_function = new aws_lambda.Function(
+            this,
+            `CdkTsLambdaApplicationFunction-${props.stageName}`,
+            {
+                runtime: aws_lambda.Runtime.NODEJS_12_X,
+                handler: "index.handler",
+                code: this.lambdaCode,
+                environment: {
+                    STAGE_NAME: props.stageName
+                }
+            }
+        );
+        // create an api gateway 
+        new aws_apigateway.LambdaRestApi(
+            this,
+            `CdkTsApiGatewayRestApi-${props.stageName}`,
+            {
+                handler: lambda_function,
+                endpointExportName: `CdkTsLambdaRestApiEndpoint-${props.stageName}`,
+                deployOptions: {
+                    stageName: props.stageName
+                }
+            }
+        );
+
+        // lambda version alias function 
+
+        // codedeploy
+
+    }
+}
+```
+
+## CodePipeline Stack
+- The CodePipeline lives in the dev account 
+- The CodePipeline need to deploy things into the production account 
+- Need to assume role which setup from the production account 
+
+
+This role enables creating resources inside the productiona account
+```
+ const prodDeploymentRole = aws_iam.Role.fromRoleArn(
+      this,
+      "ProdDeploymentRole",
+      `arn:aws:iam::product_account_id:role/CloudFormationDeploymentRole`, {
+      mutable: false
+    }
+    )
+```
+
+and this role enables accessing the S3 artifact from the production account 
+```
+const prodCrossAccountRole = aws_iam.Role.fromRoleArn(
+    this,
+    "ProdCrossAccountRole",
+    `arn:aws:iam::product_account_id:role/CdkCodePipelineCrossAcccountRole`, {
+    mutable: false
+}
+    )
+```
+
+## CodeBuild
+- Build the lambda code 
+- Build the application stack
+
+```
+stageName: 'Build',
+    actions: [
+    new aws_codepipeline_actions.CodeBuildAction({
+        actionName: 'Application_Build',
+        project: lambdaBuild,
+        input: sourceOutput,
+        outputs: [lambdaBuildOutput],
+    }),
+    new aws_codepipeline_actions.CodeBuildAction({
+        actionName: 'CDK_Synth',
+        project: cdkBuild,
+        input: sourceOutput,
+        outputs: [cdkBuildOutput],
+    }),
+    ],
+```
+
+## CodeDeploy 
+- Deploy the application stack into the dev environment 
+```
+stageName: 'Deploy_Dev',
+    actions: [
+    new aws_codepipeline_actions.CloudFormationCreateUpdateStackAction({
+        actionName: 'Deploy',
+        templatePath: cdkBuildOutput.atPath('DevApplicationStack.template.json'),
+        stackName: 'DevApplicationDeploymentStack',
+        adminPermissions: true,
+        parameterOverrides: {
+        ...props.devApplicationStack.lambdaCode.assign(lambdaBuildOutput.s3Location),
+        },
+        extraInputs: [lambdaBuildOutput]
+    })
+    ],
+```
+- Deploy the application stack into the production environment
+```
+stageName: 'Deploy_Prod',
+    actions: [
+    new aws_codepipeline_actions.CloudFormationCreateUpdateStackAction({
+        actionName: 'Deploy',
+        templatePath: cdkBuildOutput.atPath('ProdApplicationStack.template.json'),
+        stackName: 'ProdApplicationDeploymentStack',
+        adminPermissions: true,
+        parameterOverrides: {
+        ...props.prodApplicationStack.lambdaCode.assign(lambdaBuildOutput.s3Location),
+        },
+        deploymentRole: prodDeploymentRole,
+        cfnCapabilities: [CfnCapabilities.ANONYMOUS_IAM],
+        role: prodCrossAccountRole,
+        extraInputs: [lambdaBuildOutput],
+    }),
+    ],
+```
+Note to add the inline policy to the assume role 
+```
+pipeline.addToRolePolicy(
+      new aws_iam.PolicyStatement({
+        actions: ['sts:AssumeRole'],
+        resources: ["arn:aws:iam::product_account_id:role/*"]
+      }));
+```
+Note the KMS key which encrypt the S3 artifact bucket 
+```
+new CfnOutput(
+    this,
+    "ArtifactBucketEncryptionKeyArn", {
+    value: key.keyArn,
+    exportName: "ArtifactBucketEncryptionKey"
+});
+```
+
+## Policy CodePipelineCrossAccountRole
 This allow the ProductionAccount when deploying CloudFormation can access the S3 ArtifactBucket where code for the Lambda function is stored. 
 ```
 {
