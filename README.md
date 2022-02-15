@@ -2,7 +2,8 @@
 **[reference here](https://aws.amazon.com/blogs/devops/building-a-ci-cd-pipeline-for-cross-account-deployment-of-an-aws-lambda-api-with-the-serverless-framework/)** and **[here](https://catalog.us-east-1.prod.workshops.aws/v2/workshops/00bc829e-fd7c-4204-9da1-faea3cf8bd88/)**
 ## Architecture 
 
-![cross_account_ci_cd_pipeline drawio](https://user-images.githubusercontent.com/20411077/153971985-96bf6eb4-86b8-49c9-984e-91e24fcc7012.png)
+
+![cross_account_ci_cd_pipeline drawio (1)](https://user-images.githubusercontent.com/20411077/153972206-e9ed989b-78d4-43b8-8a07-48d282375f8d.png)
 
 
 ## Connect to AWS CodeCommit by HTTPS
