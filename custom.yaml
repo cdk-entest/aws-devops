@@ -23,6 +23,9 @@ Resources:
               - Effect: Allow
                 Action: "s3:*"
                 Resource: "*"
+              - Effect: Allow
+                Action: "logs:*"
+                Resource: "*"
   # lambda function 
   DeviceFarmProjectFunction:
     Type: AWS::Lambda::Function
@@ -76,7 +79,10 @@ Resources:
               if event['RequestType'] == 'Delete':
                 pass
               if event['RequestType'] == 'Create':
-                client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': 'ap-southeast-1'})
+                try:
+                  client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': 'ap-southeast-1'})
+                except:
+                  pass
               if event['RequestType'] == 'Update':
                 pass
               send(event, context, SUCCESS, {'Arn': bucket_name})

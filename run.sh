@@ -10,3 +10,6 @@ aws cloudformation update-stack \
 
 aws cloudformation delete-stack \
   --stack-name cfn-custom-resource-demo
+
+
+client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': 'ap-southeast-1'})
