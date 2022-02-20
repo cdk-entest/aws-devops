@@ -2,6 +2,12 @@
 **20 FEB 2022 Hai Tran**
 
 ## Architecture 
+- Syntax to create a custom resouce **Type: Custom::CustomeResourceName**
+- Provider which create resource: Lambda or SNS 
+- CloudFormation sends an event to the Lambda
+- Lambda parse properties from the event and execute the logic
+- Lambda response to CloudFormation <br/>
+
 ![aws-devops](https://user-images.githubusercontent.com/20411077/154826824-b94b2e60-9f5f-4589-a4db-420b7879f1be.png)
 
 ## Example 
