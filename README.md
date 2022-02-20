@@ -12,15 +12,15 @@
 
 ## Example 
 ```
-DeviceFarmProject:
-  Type: Custom::DeviceFarmProject
+CustomResourceS3FromLambda:
+  Type: Custom::S3FromLambda
   Properties:
-    ServiceToken: !GetAtt  DeviceFarmProjectFunction.Arn
+    ServiceToken: !GetAtt  CfnLambdaCreateS3Bucket.Arn
     ProjectName: "DeviceFarmProjectName"
 ```
 The requried field is **ServiceToken** which can be Lambda or SNS
 ```
-DeviceFarmProjectFunction:
+CfnLambdaCreateS3Bucket:
     Type: AWS::Lambda::Function
     Properties:
       Description: "Creates, updates, deletes Device  Farm projects"
@@ -41,7 +41,7 @@ DeviceFarmProjectFunction:
                 pass
               if event['RequestType'] == 'Create':
                 try:
-                  client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': 'ap-southeast-1'})
+                  client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={...})
                 except:
                   pass
               if event['RequestType'] == 'Update':
@@ -52,6 +52,10 @@ DeviceFarmProjectFunction:
           
 ```
 ## cfnresponse
+cfnrseponse is supported and can be imported provide that 
+- ZipFile to deploy the lambda 
+- Runtime Python3.6 <br/>
+Sometime, we need to implement the cfnresponse as the following 
 ```
 import json
 import boto3
