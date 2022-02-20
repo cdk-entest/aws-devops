@@ -55,6 +55,7 @@ CfnLambdaCreateS3Bucket:
 cfnrseponse is supported and can be imported provide that 
 - ZipFile to deploy the lambda 
 - Runtime Python3.6 <br/>
+
 Sometime, we need to implement the cfnresponse as the following 
 ```
 import json
