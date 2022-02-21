@@ -1,4 +1,12 @@
-import { aws_cloudwatch, aws_cloudwatch_actions, aws_sns, CfnOutput, Duration, Stack, StackProps } from 'aws-cdk-lib';
+import {
+  aws_cloudwatch,
+  aws_cloudwatch_actions,
+  aws_sns,
+  CfnOutput,
+  Duration,
+  Stack,
+  StackProps
+} from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { aws_lambda } from 'aws-cdk-lib';
 import * as path from 'path'
@@ -44,6 +52,47 @@ export class LambdaCloudwatchAlarmStack extends Stack {
         "CodePipelineNotification",
         "arn:aws:sns:ap-southeast-1::CodePipelineNotification"
       ))
+    )
+
+    // dashboard for the lambda
+    const dashboard = new aws_cloudwatch.Dashboard(
+      this,
+      "dashboardDemo",
+      {
+        dashboardName: "dashboardLambdaDemo"
+      }
+    )
+
+    // create title for dashboard
+    dashboard.addWidgets(
+      new aws_cloudwatch.TextWidget({
+        markdown: `# Dashboard: ${fn.functionName}`,
+        height: 1,
+        width: 24
+      })
+    )
+
+    // add dashboard widgets 
+    dashboard.addWidgets(
+      new aws_cloudwatch.GraphWidget({
+        title: "Invocation",
+        left: [fn.metricInvocations(
+          {
+            statistic: 'sum',
+            period: Duration.minutes(1)
+          }
+        )],
+        width: 24
+      })
+    )
+
+    // add dashboard widgets 
+    dashboard.addWidgets(
+      new aws_cloudwatch.GraphWidget({
+        title: "Duration",
+        left: [fn.metricDuration()],
+        width: 24
+      })
     )
 
     // output 
