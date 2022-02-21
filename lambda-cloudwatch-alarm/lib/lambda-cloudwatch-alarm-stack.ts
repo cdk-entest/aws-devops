@@ -42,7 +42,7 @@ export class LambdaCloudwatchAlarmStack extends Stack {
       new aws_cloudwatch_actions.SnsAction(aws_sns.Topic.fromTopicArn(
         this,
         "CodePipelineNotification",
-        "arn:aws:sns:ap-southeast-1:610770234379:CodePipelineNotification"
+        "arn:aws:sns:ap-southeast-1::CodePipelineNotification"
       ))
     )
 
