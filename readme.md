@@ -1,7 +1,7 @@
-# CloudWatch Monitoring and Alarm Notification for Lambda 
+# CloudWatch Monitor and Alarm Notification for Lambda 
 **20 FEB 2022**
 
-## What metrics to monitor?
+## Metrics to monitor
 This note show a basic example how to use CloudWatch to monitor a Lambda function and notify when number of invocation greater than X within several minutes. 
 - CloudWatch metrics for a Lambda fuction
     - Number of invocation within 5 minutes (period)
