@@ -16,8 +16,11 @@ This note show a basic example how to use CloudWatch to monitor a Lambda functio
 Some notes
 - CloudWatch logs are stored for 15 months, need to save to S3 if need longer 
 - Lambda sends logs to CloudWatch per 1 minute 
-- Principle to prevent premature/false alarm by M out of N (the trailing window)
+- Principle to prevent premature/false alarm by M out of N (the trailing window) <br/>
 
+![111](https://user-images.githubusercontent.com/20411077/155051909-2b1754df-0518-413f-9562-e15edf94ac91.png)
+
+![113](https://user-images.githubusercontent.com/20411077/155051926-3a8972b0-4fd5-45df-a257-f302d412d3ed.png)
 
 ## Stack in CDK 
 create a lambda function
