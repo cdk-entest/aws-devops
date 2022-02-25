@@ -15,7 +15,7 @@ def handler(event, context):
 
     # publish message to topic
     sns.publish(
-        TopicArn='arn:aws:sns:ap-southeast-1:610770234379:CodePipelineNotification',
+        TopicArn='arn:aws:sns:ap-southeast-1:account_id:CodePipelineNotification',
         Message=f'lambda process message from queue {event}'
     )
 
