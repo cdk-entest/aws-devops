@@ -1,7 +1,7 @@
 # AWS SQS and Lambda Event Source 
 
 ## Architecrture 
-![aws-devops](https://user-images.githubusercontent.com/20411077/155686633-bfcccfc4-2166-42b7-bc19-5036cf869968.png)
+![aws-devops (1)](https://user-images.githubusercontent.com/20411077/155687651-e844b35e-cc84-4c1d-aaa5-c64fef8c55f2.png)
 
 API gateway integerates with SQS queue via **aws_apigateway.AwsIntegration** class and API Gateway need a role or granted to write messages to the queue. **Note** After the message successuflly processed by the lambda, need to return **statusCode: 200** to the SQS queue, so the queue will delete the processed message. Fail/exception messages will be put in a dead letter queue (DLQ)
 
