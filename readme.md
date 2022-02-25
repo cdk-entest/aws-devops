@@ -1,6 +1,8 @@
 # AWS SQS and Lambda Event Source 
 
 ## Architecrture 
+![aws-devops](https://user-images.githubusercontent.com/20411077/155686633-bfcccfc4-2166-42b7-bc19-5036cf869968.png)
+
 API gateway integerates with SQS queue via **aws_apigateway.AwsIntegration** class and API Gateway need a role or granted to write messages to the queue. 
 
 ## Role to enable API Gateway writting messages to the SQS queue 
