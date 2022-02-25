@@ -3,7 +3,7 @@
 ## Architecrture 
 ![aws-devops](https://user-images.githubusercontent.com/20411077/155686633-bfcccfc4-2166-42b7-bc19-5036cf869968.png)
 
-API gateway integerates with SQS queue via **aws_apigateway.AwsIntegration** class and API Gateway need a role or granted to write messages to the queue. 
+API gateway integerates with SQS queue via **aws_apigateway.AwsIntegration** class and API Gateway need a role or granted to write messages to the queue. **Note** After the message successuflly processed by the lambda, need to return **statusCode: 200** to the SQS queue, so the queue will delete the processed message. Fail/exception messages will be put in a dead letter queue (DLQ)
 
 ## Role to enable API Gateway writting messages to the SQS queue 
 ```
