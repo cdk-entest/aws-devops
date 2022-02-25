@@ -1,4 +1,4 @@
-// aws sqs send-message --message-body "Hello Hai" --queue-url https://sqs.ap-southeast-1.amazonaws.com/610770234379/sqsQueueApiGatewayDemo
+// aws sqs send-message --message-body "Hello Hai" --queue-url https://sqs.ap-southeast-1.amazonaws.com/account_id/sqsQueueApiGatewayDemo
 
 import { 
   aws_apigateway,
@@ -123,7 +123,7 @@ export class ApiGatewaySqsStack extends Stack {
     const topic = aws_sns.Topic.fromTopicArn(
       this,
       'lambdaSendMessageToSnsDemo',
-      'arn:aws:sns:ap-southeast-1:610770234379:CodePipelineNotification'
+      'arn:aws:sns:ap-southeast-1:account_id:CodePipelineNotification'
     )
 
     // grant publish to lambda 
