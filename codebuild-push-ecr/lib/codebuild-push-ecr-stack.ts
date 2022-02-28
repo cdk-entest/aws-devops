@@ -3,8 +3,11 @@ import {
   aws_codecommit, 
   aws_codepipeline, 
   aws_codepipeline_actions, 
+  aws_ecr, 
   aws_iam, 
+  aws_lambda, 
   aws_s3, 
+  Duration, 
   Stack, 
   StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -53,7 +56,8 @@ export class CodebuildPushEcrStack extends Stack {
 
     // artifact folders for source, codebuild 
     const sourceOutput = new aws_codepipeline.Artifact('SourceOutput')
-    const codeBuildOutput = new aws_codepipeline.Artifact("CodeBuildOUtput")
+    const codeBuildOutput = new aws_codepipeline.Artifact("CodeBuildOutput")
+    const cdkBuildOutput = new aws_codepipeline.Artifact('CdkBuildOutput')
 
     
     // codebuild project 
@@ -62,6 +66,10 @@ export class CodebuildPushEcrStack extends Stack {
       'CodeBuildProject',
       {
         role: role,
+        environmentVariables: {
+          AWS_ACCOUNT_ID: {value: '610770234379'},
+          IMAGE_TAG: {value: 'latest'}
+        },
         environment: {
           buildImage: aws_codebuild.LinuxBuildImage.STANDARD_5_0,
           computeType: aws_codebuild.ComputeType.MEDIUM,
@@ -78,20 +86,20 @@ export class CodebuildPushEcrStack extends Stack {
             // login in ecr 
             pre_build: {
               commands: [
-                'aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com'
+                'aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com'
               ]
             },
             // build ecr image 
             build: {
               commands: [
-                'docker build -t  fhr-ecr-image:latest ./lib/lambda/',
-                'docker tag fhr-ecr-image:latest $AWS_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com/fhr-ecr-image:latest'
+                'docker build -t  fhr-ecr-image:${CODEBUILD_BUILD_NUMBER} ./lib/lambda/',
+                'docker tag fhr-ecr-image:${CODEBUILD_BUILD_NUMBER} ${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com/fhr-ecr-image:${CODEBUILD_BUILD_NUMBER}'
               ]
             },
             // push ecr image 
             post_build: {
               commands: [
-                'docker push $AWS_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com/fhr-ecr-image:latest'
+                'docker push ${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com/fhr-ecr-image:${CODEBUILD_BUILD_NUMBER}'
               ]
             }
           }, 
@@ -104,10 +112,50 @@ export class CodebuildPushEcrStack extends Stack {
       }
     )
 
+    // CodeBuild project for cdk build 
+    const cdkBuild = new aws_codebuild.PipelineProject(
+      this, 
+      'CdkBuikd',
+      {
+        environment: {
+          buildImage: aws_codebuild.LinuxBuildImage.STANDARD_5_0
+        },
+        environmentVariables: {
+          IMAGE_TAG: {value: 'latest'}
+        },
+
+        buildSpec: aws_codebuild.BuildSpec.fromObject({
+          version: '0.2',
+          phases: {
+            install: {
+              commands: [
+                'npm install'
+              ]
+            },
+            pre_build: {
+              commands: [
+                'echo ${IMAGE_TAG}',
+                'npm run build',
+                'npm run cdk synth -- -c IMAGE_TAG=${IMAGE_TAG} -o dist'
+              ]
+            }
+          },
+          artifacts: {
+            'base-directory': 'dist',
+            files: [
+              '*.template.json'
+            ]
+          }
+        })
+      }
+    )
+
+
     // codepipeline 
     new aws_codepipeline.Pipeline(
       this, 
       'CodePiplineProject', {
+        artifactBucket: artifactBucket,
         stages: [
           {
             stageName: 'Source',
@@ -127,6 +175,13 @@ export class CodebuildPushEcrStack extends Stack {
                 project: codeBuild, 
                 input: sourceOutput, 
                 outputs: [codeBuildOutput]
+              }),
+
+              new aws_codepipeline_actions.CodeBuildAction({
+                actionName: 'BuildStack',
+                project: cdkBuild,
+                input: sourceOutput,
+                outputs: [cdkBuildOutput]
               })
             ]
           }
@@ -142,7 +197,32 @@ export class ApplicationStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props)
 
-    // lambda fron ecr image uri 
+    // get image tag from CDK context 
+    const IMAGE_TAG = this.node.tryGetContext('IMAGE_TAG')
+
+    // lambda fron ecr image uri
+    const fn = new aws_lambda.Function(
+      this,
+      'LambdaFromEcrDemo',
+      {
+        runtime: aws_lambda.Runtime.FROM_IMAGE,
+        handler: aws_lambda.Handler.FROM_IMAGE,
+        timeout: Duration.seconds(90),
+        environment: {
+          'FHR_ENV': 'DEPLOY'
+        },
+        code: aws_lambda.Code.fromEcrImage(
+          aws_ecr.Repository.fromRepositoryName(
+            this,
+            'EcrImageRepositoryDemo',
+            'fhr-ecr-image',
+          ), 
+          {
+            tag: IMAGE_TAG
+          }
+        )
+      }
+    )
 
     // api gateway 
 
