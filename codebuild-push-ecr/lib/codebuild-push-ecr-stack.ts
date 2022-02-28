@@ -7,12 +7,14 @@ import {
   aws_iam, 
   aws_lambda, 
   aws_s3, 
+  aws_ssm, 
   Duration, 
   Stack, 
   StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
 export class CodebuildPushEcrStack extends Stack {
+
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
@@ -33,6 +35,11 @@ export class CodebuildPushEcrStack extends Stack {
             new aws_iam.PolicyStatement({
               effect: aws_iam.Effect.ALLOW,
               actions: ['ecr:*'],
+              resources: ['*']
+            }),
+            new aws_iam.PolicyStatement({
+              effect: aws_iam.Effect.ALLOW,
+              actions: ['ssm:*'],
               resources: ['*']
             })
           ]
@@ -67,8 +74,7 @@ export class CodebuildPushEcrStack extends Stack {
       {
         role: role,
         environmentVariables: {
-          AWS_ACCOUNT_ID: {value: '610770234379'},
-          IMAGE_TAG: {value: 'latest'}
+          AWS_ACCOUNT_ID: {value: '610770234379'}
         },
         environment: {
           buildImage: aws_codebuild.LinuxBuildImage.STANDARD_5_0,
@@ -92,25 +98,37 @@ export class CodebuildPushEcrStack extends Stack {
             // build ecr image 
             build: {
               commands: [
-                'docker build -t  fhr-ecr-image:${CODEBUILD_BUILD_NUMBER} ./lib/lambda/',
-                'docker tag fhr-ecr-image:${CODEBUILD_BUILD_NUMBER} ${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com/fhr-ecr-image:${CODEBUILD_BUILD_NUMBER}'
+                'docker build -t  fhr-ecr-image:${CODEBUILD_RESOLVED_SOURCE_VERSION} ./lib/lambda/',
+                'docker tag fhr-ecr-image:${CODEBUILD_RESOLVED_SOURCE_VERSION} ${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com/fhr-ecr-image:${CODEBUILD_RESOLVED_SOURCE_VERSION}'
               ]
             },
             // push ecr image 
             post_build: {
               commands: [
-                'docker push ${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com/fhr-ecr-image:${CODEBUILD_BUILD_NUMBER}'
+                'export imageTag=${CODEBUILD_RESOLVED_SOURCE_VERSION}',
+                'docker push ${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com/fhr-ecr-image:${CODEBUILD_RESOLVED_SOURCE_VERSION}',
+                'echo ${CODEBUILD_RESOLVED_SOURCE_VERSION}',
+                'aws ssm put-parameter --name FhrEcrImageTagDemo --type String --value ${CODEBUILD_RESOLVED_SOURCE_VERSION} --overwrite'
               ]
             }
           }, 
-          artifacts: {
-            files: [
-
+          env: {
+            'exported-variables': [
+              'imageTag'
             ]
           }
         })
       }
     )
+
+    //
+    const buildAction = new aws_codepipeline_actions.CodeBuildAction({
+      actionName: 'BuildEcrImage',
+      project: codeBuild, 
+      input: sourceOutput, 
+      outputs: [codeBuildOutput]
+    })
+
 
     // CodeBuild project for cdk build 
     const cdkBuild = new aws_codebuild.PipelineProject(
@@ -120,10 +138,6 @@ export class CodebuildPushEcrStack extends Stack {
         environment: {
           buildImage: aws_codebuild.LinuxBuildImage.STANDARD_5_0
         },
-        environmentVariables: {
-          IMAGE_TAG: {value: 'latest'}
-        },
-
         buildSpec: aws_codebuild.BuildSpec.fromObject({
           version: '0.2',
           phases: {
@@ -134,27 +148,26 @@ export class CodebuildPushEcrStack extends Stack {
             },
             pre_build: {
               commands: [
-                'echo ${IMAGE_TAG}',
                 'npm run build',
-                'npm run cdk synth -- -c IMAGE_TAG=${IMAGE_TAG} -o dist'
+                'npm run cdk synth -- -o dist'
               ]
             }
           },
           artifacts: {
             'base-directory': 'dist',
             files: [
-              '*.template.json'
+              '*template.json'
             ]
           }
         })
       }
     )
 
-
     // codepipeline 
     new aws_codepipeline.Pipeline(
       this, 
-      'CodePiplineProject', {
+      'CodePiplineProject', 
+      {
         artifactBucket: artifactBucket,
         stages: [
           {
@@ -170,18 +183,26 @@ export class CodebuildPushEcrStack extends Stack {
           {
             stageName: 'Build', 
             actions: [
-              new aws_codepipeline_actions.CodeBuildAction({
-                actionName: 'BuildEcrImage',
-                project: codeBuild, 
-                input: sourceOutput, 
-                outputs: [codeBuildOutput]
-              }),
-
+              buildAction,
               new aws_codepipeline_actions.CodeBuildAction({
                 actionName: 'BuildStack',
                 project: cdkBuild,
                 input: sourceOutput,
                 outputs: [cdkBuildOutput]
+              })
+            ]
+          },
+
+          {
+            stageName: 'Deploy',
+            actions: [
+              new aws_codepipeline_actions.CloudFormationCreateUpdateStackAction({
+                actionName: 'DeployLambdaEcrDemo',
+                templatePath: cdkBuildOutput.atPath('ApplicationStack.template.json'),
+                stackName: 'ApplicationStackEcrTagDemo',
+                parameterOverrides: {
+                },
+                adminPermissions: true
               })
             ]
           }
@@ -196,9 +217,6 @@ export class CodebuildPushEcrStack extends Stack {
 export class ApplicationStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props)
-
-    // get image tag from CDK context 
-    const IMAGE_TAG = this.node.tryGetContext('IMAGE_TAG')
 
     // lambda fron ecr image uri
     const fn = new aws_lambda.Function(
@@ -216,32 +234,16 @@ export class ApplicationStack extends Stack {
             this,
             'EcrImageRepositoryDemo',
             'fhr-ecr-image',
-          ), 
+          ),
           {
-            tag: IMAGE_TAG
+            tag: aws_ssm.StringParameter.valueForStringParameter(
+              this, 
+              'FhrEcrImageTagDemo'
+            )
           }
         )
       }
     )
-
-    // api gateway 
-
-    // role and policies api gateway write to sqs queue 
-
-    // role and policies lambda access s3 
-
-    // sqs queue 
-
-    // aws integration 
-
-    // api gateway resource 
-
-    // api gateway method 
-
-    // lambda envent from sqs 
-
-    // cfn output 
-
   }
 }
 
