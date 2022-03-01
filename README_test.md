@@ -11,7 +11,7 @@ This note shows using SSM parameter in CI/CD for passing ECR image tag from Code
 
 ### Architecture
 
-here update
+![aws_devops drawio (1)](https://user-images.githubusercontent.com/20411077/156108554-8f6f728f-cf18-4a08-b0df-2d9773e860aa.png)
 
 ### CodeBuild role to push ecr and put-paraemter to ssm
 
