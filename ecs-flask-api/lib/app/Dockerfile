@@ -1,24 +1,3 @@
-# Deploy Python Flask API to ECS 
-**Hai  Tran  03 MAR 2022**
-
-## Python Application 
-```
-from flask import Flask
-app = Flask(__name__)
-
-@app.route('/')
-def hello_world():
-   return "Hello, World!"
-
-if __name__ == "__main__":
-   app.run(host='0.0.0.0', port=5000)
-```
-requirements.txt 
-```
-flask===1.1.2
-```
-Dockerfile
-```
 # Set base image (host OS)
 FROM python:3.8-alpine
 
@@ -39,6 +18,3 @@ COPY app.py .
 
 # Specify the command to run on container start
 CMD [ "python", "./app.py" ]
-```
-
-## 
