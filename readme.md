@@ -8,7 +8,8 @@
 - Concurrent requests are sent to API Gateway
 
 ## Architect 
-![aws_devops-ecs drawio](https://user-images.githubusercontent.com/20411077/160522061-b2bcee8d-1048-4d27-9240-586efa631044.png)
+![aws_devops-ecs drawio (1)](https://user-images.githubusercontent.com/20411077/160570478-555f5f13-c487-4ccb-9f60-673c24bde1f4.png)
+
 
 ## ECS Stack 
 - Construct ECS Cluster and Fargate Task Definition 
