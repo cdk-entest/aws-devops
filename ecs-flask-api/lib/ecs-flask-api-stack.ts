@@ -1,3 +1,4 @@
+// add comment
 import {
   aws_codebuild,
   aws_codecommit,
@@ -6,15 +7,81 @@ import {
   aws_ecr,
   aws_ecs,
   aws_iam,
+  aws_s3,
+  aws_sns,
+  aws_sqs,
+  aws_ssm,
   CfnOutput,
+  Duration,
   Stack,
-  StackProps
+  StackProps,
+  aws_autoscaling
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
 export class EcsFlaskApiStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
+
+    // sns topic from existing one 
+    const topic = aws_sns.Topic.fromTopicArn(
+      this,
+      'FhrEcsSnSTopic',
+      'arn:aws:sns:ap-southeast-1:610770234379:CodePipelineNotification'
+    )
+
+    // sqs queue 
+    const queue = new aws_sqs.Queue(
+      this,
+      'FhrEcsQueue',
+      {
+        queueName: 'SqsQueueForEcsFhr',
+        visibilityTimeout: Duration.seconds(200)
+      }
+    )
+
+    // role for ecs task 
+    const roleForEcsTask = new aws_iam.Role(
+      this,
+      'RoleForFhrEcsTask',
+      {
+        assumedBy: new aws_iam.ServicePrincipal('ecs-tasks.amazonaws.com')
+      }
+    )
+
+    // role polcies 
+    roleForEcsTask.attachInlinePolicy(
+      new aws_iam.Policy(
+        this,
+        'PoliciesForFhrEcsRole',
+        {
+          policyName: 'PoliciesForFhrEcsRole',
+          statements: [
+            new aws_iam.PolicyStatement(
+              {
+                effect: aws_iam.Effect.ALLOW,
+                actions: ['s3:*'],
+                resources: ['arn:aws:s3:::femom-fhr-data/*']
+              }
+            ),
+            new aws_iam.PolicyStatement(
+              {
+                effect: aws_iam.Effect.ALLOW,
+                actions: ['sqs:*'],
+                resources: [queue.queueArn]
+              }
+            ),
+            new aws_iam.PolicyStatement(
+              {
+                effect: aws_iam.Effect.ALLOW,
+                actions: ['sns:*'],
+                resources: [topic.topicArn]
+              }
+            )
+          ]
+        }
+      )
+    )
 
     // ecs cluster 
     const cluster = new aws_ecs.Cluster(
@@ -30,38 +97,90 @@ export class EcsFlaskApiStack extends Stack {
       this,
       'FhrFlaskTaskDefinition',
       {
-        memoryLimitMiB: 128,
-        cpu: 1
+        family: 'latest',
+        taskRole: roleForEcsTask,
+        memoryLimitMiB: 10240,
+        cpu: 4096,
+        runtimePlatform: {
+          operatingSystemFamily: aws_ecs.OperatingSystemFamily.LINUX,
+          cpuArchitecture: aws_ecs.CpuArchitecture.X86_64
+        }
       }
     )
 
-    taskDefinition.addContainer(
+    const container = taskDefinition.addContainer(
       'FhrFlaskEcrImage',
       {
+        memoryLimitMiB: 10240,
+        memoryReservationMiB: 10240,
+        stopTimeout: Duration.seconds(120),
+        startTimeout: Duration.seconds(120),
+        environment: {
+          'FHR_ENV': 'DEPLOY'
+        },
         image: aws_ecs.ContainerImage.fromEcrRepository(
           aws_ecr.Repository.fromRepositoryName(
             this,
             'FhrFlaskEcrRepository',
-            'fhr-flask-api',
+            'fhr-flask-api-image',
           ),
-          'latest'
+          aws_ssm.StringParameter.valueForStringParameter(
+            this,
+            'FhrEcrImageForFhrFlaskApi'
+          )
         )
       }
     )
 
+
+
+    container.addPortMappings({
+      containerPort: 5000,
+      protocol: aws_ecs.Protocol.TCP
+    })
+
     // service 
-    new aws_ecs.FargateService(
+    const service = new aws_ecs.FargateService(
       this,
       'FargateServiceFhrFlask',
       {
         cluster,
         taskDefinition,
+        desiredCount: 2,
         capacityProviderStrategies: [
           {
+            capacityProvider: 'FARGATE',
+            weight: 1
+          },
+          {
             capacityProvider: 'FARGATE_SPOT',
-            weight: 2
+            weight: 0
           }
         ]
+      }
+    )
+
+    // scale number of task by length of queue
+    const scaling = service.autoScaleTaskCount(
+      {
+        maxCapacity: 20,
+        minCapacity: 1
+      }
+    )
+
+    scaling.scaleOnMetric(
+      'ScaleOnQueueLength',
+      {
+        metric: queue.metricApproximateNumberOfMessagesVisible(),
+        scalingSteps: [
+          { upper: 1, change: -1 },
+          { lower: 2, change: +1 },
+          { lower: 4, change: +2 },
+          { lower: 8, change: +4 },
+          { lower: 20, change: +10 },
+        ],
+        cooldown: Duration.seconds(10),
+        adjustmentType: aws_autoscaling.AdjustmentType.CHANGE_IN_CAPACITY
       }
     )
   }
@@ -119,6 +238,11 @@ export class FhrFlaskCodePipeline extends Stack {
       'CodeBuildFhrFlaskEcrImage',
       {
         role: codebuildRole,
+        environment: {
+          buildImage: aws_codebuild.LinuxBuildImage.STANDARD_5_0,
+          computeType: aws_codebuild.ComputeType.MEDIUM,
+          privileged: true
+        },
         buildSpec: aws_codebuild.BuildSpec.fromObject({
           version: '0.2',
           phases: {
@@ -128,13 +252,13 @@ export class FhrFlaskCodePipeline extends Stack {
               ]
             },
             pre_build: {
-              comands: [
+              commands: [
                 'aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 610770234379.dkr.ecr.ap-southeast-1.amazonaws.com'
               ]
             },
             build: {
               commands: [
-                'docker build -t  fhr-flask-api-image:${CODEBUILD_RESOLVED_SOURCE_VERSION} -f ./lib/lambda/DockerfileFhrS3Event ./lib/lambda/',
+                'docker build -t  fhr-flask-api-image:${CODEBUILD_RESOLVED_SOURCE_VERSION} -f ./ecs-flask-api/lib/app/Dockerfile ./ecs-flask-api/lib/app/',
                 'docker tag fhr-flask-api-image:${CODEBUILD_RESOLVED_SOURCE_VERSION} 610770234379.dkr.ecr.ap-southeast-1.amazonaws.com/fhr-flask-api-image:${CODEBUILD_RESOLVED_SOURCE_VERSION}'
               ]
             },
@@ -150,17 +274,64 @@ export class FhrFlaskCodePipeline extends Stack {
       }
     )
 
+    // ckdbuild
+    const cdkbuild = new aws_codebuild.PipelineProject(
+      this,
+      'CdkBuild',
+      {
+        environment: {
+          buildImage: aws_codebuild.LinuxBuildImage.STANDARD_5_0,
+          computeType: aws_codebuild.ComputeType.MEDIUM,
+          privileged: true
+        },
+        buildSpec: aws_codebuild.BuildSpec.fromObject({
+          version: '0.2',
+          phases: {
+            install: {
+              commands: [
+                'cd ecs-flask-api',
+                'npm install'
+              ]
+            },
+            build: {
+              commands: [
+                'npm run build',
+                'npm run cdk synth -- -o dist'
+              ]
+            }
+          },
+          artifacts: {
+            'base-directory': 'ecs-flask-api/dist',
+            files: [
+              '*.template.json'
+            ]
+          }
+        })
+      }
+    )
+
+
+    // codepipeline artifact bucket 
+    const artifactBucket = aws_s3.Bucket.fromBucketName(
+      this,
+      'ArtifactBucket',
+      'fhr-codepipeline-artifact'
+    )
+
     // artifact 
     const sourceOutput = new aws_codepipeline.Artifact('SourceOutput')
     // build output 
     const buildOutput = new aws_codepipeline.Artifact('BuildOutput')
-
+    // cdk build output
+    const cdkBuildOutput = new aws_codepipeline.Artifact('CdkBuildOutput')
 
     // code pipeline
     const codepipeline = new aws_codepipeline.Pipeline(
       this,
       'FhrFlaskCodePipeline',
       {
+        pipelineName: 'FhrFlaskCodePipeline',
+        artifactBucket: artifactBucket,
         stages: [
           {
             stageName: 'Source',
@@ -173,7 +344,7 @@ export class FhrFlaskCodePipeline extends Stack {
               })
             ]
           },
-
+          // ecr build 
           {
             stageName: 'CodeBuild',
             actions: [
@@ -184,12 +355,41 @@ export class FhrFlaskCodePipeline extends Stack {
                 outputs: [buildOutput]
               })
             ]
+          },
+          // cdk build 
+          {
+            stageName: 'CdkBuild',
+            actions: [
+              new aws_codepipeline_actions.CodeBuildAction({
+                actionName: 'CdkBuild',
+                project: cdkbuild,
+                input: sourceOutput,
+                outputs: [cdkBuildOutput]
+              })
+            ]
+          },
+
+          // deploy 
+          {
+            stageName: 'Deploy',
+            actions: [
+              new aws_codepipeline_actions.CloudFormationCreateUpdateStackAction({
+                actionName: 'Deploy',
+                templatePath: cdkBuildOutput.atPath('EcsFlaskApiStack.template.json'),
+                stackName: 'EcsFlaskApiApplicationStack',
+                adminPermissions: true,
+
+              })
+            ]
           }
         ]
       }
     )
   }
 }
+
+// ecr cluster 
+
 
 // ecr repository 
 export class FhrFlaskApiEcr extends Stack {
@@ -201,7 +401,7 @@ export class FhrFlaskApiEcr extends Stack {
       this,
       'FhrFlaskEcrRepository',
       {
-        repositoryName: 'fhr-flask-api'
+        repositoryName: 'fhr-flask-api-image'
       }
     )
 
