@@ -127,3 +127,16 @@ $ curl https://raw.githubusercontent.com/aws-samples/cloud9-to-power-vscode-blog
 $ sudo chown root:root ~/.c9/stop-if-inactive.sh
 $ sudo chmod 755 ~/.c9/stop-if-inactive.sh
 ```
+
+### Configure SSH to clone repositories from GitHub 
+```
+eval $(ssh-agent)
+```
+then 
+```
+ssh-add id_rsa_git 
+```
+git clone 
+```
+git clone git@github.com:entest-hai/aws-amplify-ui-nextjs.git
+```
