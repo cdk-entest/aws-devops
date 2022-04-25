@@ -1,14 +1,17 @@
-# Setup VSCode SSH with Cloud9 and SSM 
+# Setup VSCode SSH with Cloud9 and SSM  
 **Hai Tran 25 APR 2022**
 - [Reference](https://aws.amazon.com/blogs/architecture/field-notes-use-aws-cloud9-to-power-your-visual-studio-code-ide/)
 - Auto hibernate after 30 minutes idle 
 - Auto turn on when open vscode 
 - No open port 
 
-# Install remote ssh extension for vscode 
+### Architecture 
 
 
-# CloudFormation to launch a cloud9 environment with SSM connect 
+### Install remote ssh extension for vscode 
+
+
+### CloudFormation to launch a cloud9 environment with SSM connect 
 ```
 AWSTemplateFormatVersion: "2010-09-09"
 
@@ -42,9 +45,9 @@ Outputs:
 
 ```
 
-# Optionally can laucnh a cloud9 environment from aws cli 
+### Optionally can laucnh a cloud9 environment from aws cli 
 
-# Configure ssh for the local machine 
+### Configure ssh for the local machine 
 - Generate ssh private and public key 
 ```
 ssh-keygen -b 4096 -C 'VS Code Remote SSH user' -t rsa
@@ -116,7 +119,7 @@ and
  chmod +x ~/.ssh/ssm-proxy.sh
 ```
 
-# Configure the cloud9 ec2 instance 
+### Configure the cloud9 ec2 instance 
 ```
 # Save a copy of the script first
 $ sudo mv ~/.c9/stop-if-inactive.sh ~/.c9/stop-if-inactive.sh-SAVE
