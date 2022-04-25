@@ -1,401 +1,126 @@
-# Cross Account CI/CD Pipeline
-Sometimes we need to run the Pipeline in an account, but deploy product into another account for 
-- Further sepratation between development and production envionment
-- Protect production environment
-- For customer in another account
+# Setup VSCode SSH with Cloud9 and SSM 
+**Hai Tran 25 APR 2022**
+- [Reference](https://aws.amazon.com/blogs/architecture/field-notes-use-aws-cloud9-to-power-your-visual-studio-code-ide/)
+- Auto hibernate after 30 minutes idle 
+- Auto turn on when open vscode 
+- No open port 
 
-This note follows the reference workshop here 
-- **[aws-blog-ci-cd-pipeline-cross-account](https://aws.amazon.com/blogs/devops/building-a-ci-cd-pipeline-for-cross-account-deployment-of-an-aws-lambda-api-with-the-serverless-framework/)**
-- **[workshop-ci-cid-pipeline-cross-account](https://catalog.us-east-1.prod.workshops.aws/v2/workshops/00bc829e-fd7c-4204-9da1-faea3cf8bd88/)**
-
-Todo
-- Python CDK version
-- CloudFormation version 
-- Roles and policies created with CloudFormation 
-## Architecture 
-
-![cross_account_ci_cd_pipeline drawio (1)](https://user-images.githubusercontent.com/20411077/153972206-e9ed989b-78d4-43b8-8a07-48d282375f8d.png)
+# Install remote ssh extension for vscode 
 
 
-## Setup CDK project 
-create an empty directory 
+# CloudFormation to launch a cloud9 environment with SSM connect 
 ```
-mkdir cdk-test-cicd-pipeline
-```
-init cdk project 
-```
-cdk init --language=typescript
-```
+AWSTemplateFormatVersion: "2010-09-09"
 
-## Create a CodeCommit by a repository stack 
+Description: >
+  Creates an AWS Cloud9 EC2 environment within the default VPC with
+  a no-ingress EC2 instance. This is to be used in conjunction with 
+  Visual Studio Code and the Remote SSH extension. This relies on 
+  AWS Systems Manager in order to run properly.
 
-create lib/repository-stack.ts
-```
-import { aws_codecommit } from "aws-cdk-lib";
-import { App, Stack, StackProps } from "aws-cdk-lib";
+Resources:
+  DefaultVPCCloud9Instance:
+    Type: AWS::Cloud9::EnvironmentEC2
+    Properties:
+      InstanceType: t3.large
+      ConnectionType: CONNECT_SSM
+      Description: Cloud9 instance for use with VS Code Remote SSH
+      Name: VS Code Remote SSH Demo
 
-export class RepositoryStack extends Stack {
-    constructor(app: App, id: string, props?: StackProps) {
-
-        super(app, id, props);
-
-        new aws_codecommit.Repository(this, 'CodeCommitRepo', {
-            repositoryName: `repo-${this.account}`
-        });
-
-    }
-}
-```
-
-## Create a lambda stack for testing purpose 
-create lib/lambda-stack.ts 
-```
-import { Stack, StackProps } from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import { aws_lambda } from 'aws-cdk-lib';
-const path = require("path")
-
-export class LambdaStack extends Stack {
-    constructor(scope: Construct, id: string, props?: StackProps) {
-        super(scope, id, props);
-
-        new aws_lambda.Function(
-            this,
-            "CdkTsLambdaFunctionTest",
-            {
-                runtime: aws_lambda.Runtime.PYTHON_3_8,
-                handler: "handler.handler",
-                code: aws_lambda.Code.fromAsset(
-                    path.join(__dirname, "lambda")
-                )
-            }
-        )
-
-    }
-}
+Outputs:
+  Cloud9Instance:
+    Description: The EC2 instance powering this AWS CLoud9 environment
+    Value: !Join
+      - ""
+      - - "https://"
+        - !Ref AWS::Region
+        - ".console.aws.amazon.com/ec2/v2/home?region="
+        - !Ref AWS::Region
+        - "#Instances:search="
+        - !Ref DefaultVPCCloud9Instance
+        - ";sort=tag:Name"
 
 ```
 
-## Build and check CDK generated stacks 
+# Optionally can laucnh a cloud9 environment from aws cli 
+
+# Configure ssh for the local machine 
+- Generate ssh private and public key 
 ```
-#!/usr/bin/env node
-import 'source-map-support/register';
-import * as cdk from 'aws-cdk-lib';
-import { CdkTsCicdPipelineStack } from '../lib/cdk-ts-cicd-pipeline-stack';
-import { RepositoryStack } from '../lib/repository-stack';
-import { LambdaStack } from '../lib/lambda-stack';
-
-const app = new cdk.App();
-new CdkTsCicdPipelineStack(app, 'CdkTsCicdPipelineStack', {
-
-});
-
-new LambdaStack(app, "CdkTsLambdaStack", {
-
-})
-
-new RepositoryStack(app, 'CdkTsRepositoryStack', {
-
-})
+ssh-keygen -b 4096 -C 'VS Code Remote SSH user' -t rsa
 ```
-build and check stacks 
+select a name such as id_rsa_cloud9 
+
+- Copy the public key from the local machine 
 ```
-npm install 
-npm run build
-cdk ls
+cat ~/.ssh/id_rsa.pub 
 ```
-should see multiple stack 
+- Paste the key to authorized_keys in ec2 instance 
 ```
-CdkTsCicdPipelineStack
-CdkTsLambdaStack
-CdkTsRepositoryStack
+echo 'key pub' >> authorized_keys
 ```
-Deploy a stack and test output 
+- Download the ssm-proxy.sh and setup AWS_PROFILE, AWS_REGION 
 ```
-cdk deploy CdkTsLambdaStack
+#!/bin/bash
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+# Configuration
+# Change these values to reflect your environment
+AWS_PROFILE='cloud9'
+AWS_REGION='us-east-1'
+MAX_ITERATION=5
+SLEEP_DURATION=5
+
+# Arguments passed from SSH client
+HOST=$1
+PORT=$2
+
+STATUS=`aws ssm describe-instance-information --filters Key=InstanceIds,Values=${HOST} --output text --query 'InstanceInformationList[0].PingStatus' --profile ${AWS_PROFILE} --region ${AWS_REGION}`
+
+# If the instance is online, start the session
+if [ $STATUS == 'Online' ]; then
+    aws ssm start-session --target $HOST --document-name AWS-StartSSHSession --parameters portNumber=${PORT} --profile ${AWS_PROFILE} --region ${AWS_REGION}
+else
+    # Instance is offline - start the instance
+    aws ec2 start-instances --instance-ids $HOST --profile ${AWS_PROFILE} --region ${AWS_REGION}
+    sleep ${SLEEP_DURATION}
+    COUNT=0
+    while [ ${COUNT} -le ${MAX_ITERATION} ]; do
+        STATUS=`aws ssm describe-instance-information --filters Key=InstanceIds,Values=${HOST} --output text --query 'InstanceInformationList[0].PingStatus' --profile ${AWS_PROFILE} --region ${AWS_REGION}`
+        if [ ${STATUS} == 'Online' ]; then
+            break
+        fi
+        # Max attempts reached, exit
+        if [ ${COUNT} -eq ${MAX_ITERATION} ]; then
+            exit 1
+        else
+            let COUNT=COUNT+1
+            sleep ${SLEEP_DURATION}
+        fi
+    done
+    # Instance is online now - start the session
+    aws ssm start-session --target $HOST --document-name AWS-StartSSHSession --parameters portNumber=${PORT} --profile ${AWS_PROFILE} --region ${AWS_REGION}
+fi
 ```
-
-## Application Stack 
-This is a smple lambda function with code from local assset folder. The important thing is that 
-- CodeBuild will output DevApplicationStack.template.json in the artifact bucket
-- CodeBuild will output ProdApplicationStack.template.json in the artifact bucket
-- CloudFormation running in the production account need to access the artifact bucket in the dev environment that is why we need roles below. This is the application stack which is a simple lambda api. 
+- Configure ssh config for the local machine 
 ```
-import { aws_lambda } from "aws-cdk-lib";
-import { aws_apigateway } from "aws-cdk-lib";
-import { App, Stack, StackProps } from "aws-cdk-lib";
-import * as path from "path"
-
-export interface ApplicationStackProps extends StackProps {
-    readonly stageName: string
-}
-
-export class ApplicationStack extends Stack {
-
-    // lambad code from 
-    public readonly lambdaCode: aws_lambda.CfnParametersCode;
-
-    // constructor
-    constructor(app: App, id: string, props: ApplicationStackProps) {
-        super(app, id, props);
-
-        // lambda code 
-        this.lambdaCode = aws_lambda.Code.fromCfnParameters();
-
-        // create a lambda function 
-        const lambda_function = new aws_lambda.Function(
-            this,
-            `CdkTsLambdaApplicationFunction-${props.stageName}`,
-            {
-                runtime: aws_lambda.Runtime.NODEJS_12_X,
-                handler: "index.handler",
-                code: this.lambdaCode,
-                environment: {
-                    STAGE_NAME: props.stageName
-                }
-            }
-        );
-        // create an api gateway 
-        new aws_apigateway.LambdaRestApi(
-            this,
-            `CdkTsApiGatewayRestApi-${props.stageName}`,
-            {
-                handler: lambda_function,
-                endpointExportName: `CdkTsLambdaRestApiEndpoint-${props.stageName}`,
-                deployOptions: {
-                    stageName: props.stageName
-                }
-            }
-        );
-
-        // lambda version alias function 
-
-        // codedeploy
-
-    }
-}
+Host cloud9
+    IdentityFile ~/.ssh/id_rsa_cloud9
+    User ec2-user
+    HostName i-0bf311ce929d7f91c 
+    ProxyCommand sh -c "~/.ssh/ssm-proxy.sh %h %p"
+```
+and 
+```
+ chmod +x ~/.ssh/ssm-proxy.sh
 ```
 
-## CodePipeline Stack
-- The CodePipeline lives in the dev account 
-- The CodePipeline need to deploy things into the production account 
-- Need to assume role which setup from the production account 
-
-
-This role enables creating resources inside the productiona account
+# Configure the cloud9 ec2 instance 
 ```
- const prodDeploymentRole = aws_iam.Role.fromRoleArn(
-      this,
-      "ProdDeploymentRole",
-      `arn:aws:iam::product_account_id:role/CloudFormationDeploymentRole`, {
-      mutable: false
-    }
-    )
-```
-
-and this role enables accessing the S3 artifact from the production account 
-```
-const prodCrossAccountRole = aws_iam.Role.fromRoleArn(
-    this,
-    "ProdCrossAccountRole",
-    `arn:aws:iam::product_account_id:role/CdkCodePipelineCrossAcccountRole`, {
-    mutable: false
-}
-    )
-```
-
-## CodeBuild
-- Build the lambda code 
-- Build the application stack
-
-```
-stageName: 'Build',
-    actions: [
-    new aws_codepipeline_actions.CodeBuildAction({
-        actionName: 'Application_Build',
-        project: lambdaBuild,
-        input: sourceOutput,
-        outputs: [lambdaBuildOutput],
-    }),
-    new aws_codepipeline_actions.CodeBuildAction({
-        actionName: 'CDK_Synth',
-        project: cdkBuild,
-        input: sourceOutput,
-        outputs: [cdkBuildOutput],
-    }),
-    ],
-```
-
-## CodeDeploy 
-- Deploy the application stack into the dev environment 
-```
-stageName: 'Deploy_Dev',
-    actions: [
-    new aws_codepipeline_actions.CloudFormationCreateUpdateStackAction({
-        actionName: 'Deploy',
-        templatePath: cdkBuildOutput.atPath('DevApplicationStack.template.json'),
-        stackName: 'DevApplicationDeploymentStack',
-        adminPermissions: true,
-        parameterOverrides: {
-        ...props.devApplicationStack.lambdaCode.assign(lambdaBuildOutput.s3Location),
-        },
-        extraInputs: [lambdaBuildOutput]
-    })
-    ],
-```
-- Deploy the application stack into the production environment
-```
-stageName: 'Deploy_Prod',
-    actions: [
-    new aws_codepipeline_actions.CloudFormationCreateUpdateStackAction({
-        actionName: 'Deploy',
-        templatePath: cdkBuildOutput.atPath('ProdApplicationStack.template.json'),
-        stackName: 'ProdApplicationDeploymentStack',
-        adminPermissions: true,
-        parameterOverrides: {
-        ...props.prodApplicationStack.lambdaCode.assign(lambdaBuildOutput.s3Location),
-        },
-        deploymentRole: prodDeploymentRole,
-        cfnCapabilities: [CfnCapabilities.ANONYMOUS_IAM],
-        role: prodCrossAccountRole,
-        extraInputs: [lambdaBuildOutput],
-    }),
-    ],
-```
-Note to add the inline policy to the assume role 
-```
-pipeline.addToRolePolicy(
-      new aws_iam.PolicyStatement({
-        actions: ['sts:AssumeRole'],
-        resources: ["arn:aws:iam::product_account_id:role/*"]
-      }));
-```
-Note the KMS key which encrypt the S3 artifact bucket 
-```
-new CfnOutput(
-    this,
-    "ArtifactBucketEncryptionKeyArn", {
-    value: key.keyArn,
-    exportName: "ArtifactBucketEncryptionKey"
-});
-```
-
-## Policy CodePipelineCrossAccountRole
-This allow the ProductionAccount when deploying CloudFormation can access the S3 ArtifactBucket where code for the Lambda function is stored. 
-```
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": [
-                "cloudformation:*",
-                "iam:PassRole"
-            ],
-            "Resource": "*",
-            "Effect": "Allow"
-        },
-        {
-            "Action": [
-                "s3:Get*",
-                "s3:Put*",
-                "s3:ListBucket"
-            ],
-            "Resource": [
-                "arn:aws:s3:::artifact-bucket-{DEV_ACCOUNT_ID}",
-                "arn:aws:s3:::artifact-bucket-{DEV_ACCOUNT_ID}/*"
-            ],
-            "Effect": "Allow"
-        },
-        {
-            "Action": [ 
-                "kms:DescribeKey", 
-                "kms:GenerateDataKey*", 
-                "kms:Encrypt", 
-                "kms:ReEncrypt*", 
-                "kms:Decrypt" 
-            ], 
-            "Resource": "{KEY_ARN}",
-            "Effect": "Allow"
-        }
-    ]
-}
-```
-## Policy CloudFormationDeploymentRole 
-This allow the CloudFormation in the ProductionAccount can create resources when deploying stacks developed from the develop account. 
-
-```
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": "iam:PassRole",
-            "Resource": "arn:aws:iam::{PROD_ACCOUNT_ID}:role/*",
-            "Effect": "Allow"
-        },
-        {
-            "Action": [
-                "iam:GetRole",
-                "iam:CreateRole",
-                "iam:AttachRolePolicy"
-            ],
-            "Resource": "arn:aws:iam::{PROD_ACCOUNT_ID}:role/*",
-            "Effect": "Allow"
-        },
-        {
-            "Action": "lambda:*",
-            "Resource": "*",
-            "Effect": "Allow"
-        },
-        {
-            "Action": "apigateway:*",
-            "Resource": "*",
-            "Effect": "Allow"
-        },
-        {
-            "Action": "codedeploy:*",
-            "Resource": "*",
-            "Effect": "Allow"
-        },
-        {
-            "Action": [
-                "s3:GetObject*",
-                "s3:GetBucket*",
-                "s3:List*"
-            ],
-            "Resource": [
-                "arn:aws:s3:::artifact-bucket-{DEV_ACCOUNT_ID}",
-                "arn:aws:s3:::artifact-bucket-{DEV_ACCOUNT_ID}/*"
-            ],
-            "Effect": "Allow"
-        },
-        {
-            "Action": [
-                "kms:Decrypt",
-                "kms:DescribeKey"
-            ],
-            "Resource": "{KEY_ARN}",
-            "Effect": "Allow"
-        },
-        {
-            "Action": [
-                "cloudformation:CreateStack",
-                "cloudformation:DescribeStack*",
-                "cloudformation:GetStackPolicy",
-                "cloudformation:GetTemplate*",
-                "cloudformation:SetStackPolicy",
-                "cloudformation:UpdateStack",
-                "cloudformation:ValidateTemplate"
-            ],
-            "Resource": "arn:aws:cloudformation:us-east-2:{PROD_ACCOUNT_ID}:stack/ProdApplicationDeploymentStack/*",
-            "Effect": "Allow"
-        }
-    ]
-}
-```
-
-## Connect to AWS CodeCommit by HTTPS
-Goto AWS IAM console and download credential to access AWS CodeCommit 
-```
-git config --global credential.helper '!aws codecommit credential-helper $@'
-git config --global credential.UseHttpPath true
+# Save a copy of the script first
+$ sudo mv ~/.c9/stop-if-inactive.sh ~/.c9/stop-if-inactive.sh-SAVE
+$ curl https://raw.githubusercontent.com/aws-samples/cloud9-to-power-vscode-blog/main/scripts/stop-if-inactive.sh -o ~/.c9/stop-if-inactive.sh
+$ sudo chown root:root ~/.c9/stop-if-inactive.sh
+$ sudo chmod 755 ~/.c9/stop-if-inactive.sh
 ```
