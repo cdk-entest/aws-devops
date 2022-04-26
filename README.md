@@ -1,24 +1,97 @@
-# Setup VSCode SSH with Cloud9 and SSM  
+# Part I Setup SSM and SSH Tunnel to EC2 in Private VPC
+
+### Archiecture
+
+### Summary
+
+- Connect to EC2 in a private subnet via SSM session
+- SSH to EC2 in a private subnet via SSM tunneling and proxyCommand
+- vscode ssh remote to EC2 in a private subnet
+
+### Setup for local machine
+
+Generate SSH key pair
+
+```
+ssh-keygen -b 4096 -C 'VS Code Remote SSH user' -t rsa
+
+```
+
+Configure ssh **config** file
+
+```
+Host ssm-private-ec2
+  IdentityFile ~/.ssh/id_rsa
+  HostName i-026bb5f5caaf16aa1
+  User ec2-user
+  ProxyCommand sh -c "~/.ssh/ssm-private-ec2-proxy.sh %h %p"
+  ServerAliveInterval 180
+```
+
+Configure the ssm-proxy file
+
+```
+#!/bin/bash
+
+AWS_PROFILE='entest'
+AWS_REGION='ap-southeast-1'
+MAX_ITERATION=5
+SLEEP_DURATION=5
+
+# Arguments passed from SSH client
+HOST=$1
+PORT=$2
+
+echo $HOST
+
+# Start ssm session
+aws ssm start-session --target $HOST --document-name AWS-StartSSHSession --parameters portNumber=${PORT} --profile ${AWS_PROFILE} --region ${AWS_REGION}
+
+```
+
+### Setup for the EC2 instance
+
+root password
+
+```
+sudo passwd ec2-user
+
+```
+
+check ssh running
+
+```
+ps aux | grep sshd
+```
+
+add the **id_rsa.pub** generated from the local machine
+
+```
+echo id_rsa_key >> authorized_keys
+```
+
+# Part II Setup VSCode SSH with Cloud9 and SSM
+
 **Hai Tran 25 APR 2022**
+
 - [Reference](https://aws.amazon.com/blogs/architecture/field-notes-use-aws-cloud9-to-power-your-visual-studio-code-ide/)
-- Auto hibernate after 30 minutes idle 
-- Auto turn on when open vscode 
-- No open port 
+- Auto hibernate after 30 minutes idle
+- Auto turn on when open vscode
+- No open port
 
-### Architecture 
+### Architecture
 
+### Install remote ssh extension for vscode
 
-### Install remote ssh extension for vscode 
+### CloudFormation to launch a cloud9 environment with SSM connect
 
-
-### CloudFormation to launch a cloud9 environment with SSM connect 
 ```
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >
   Creates an AWS Cloud9 EC2 environment within the default VPC with
-  a no-ingress EC2 instance. This is to be used in conjunction with 
-  Visual Studio Code and the Remote SSH extension. This relies on 
+  a no-ingress EC2 instance. This is to be used in conjunction with
+  Visual Studio Code and the Remote SSH extension. This relies on
   AWS Systems Manager in order to run properly.
 
 Resources:
@@ -45,24 +118,32 @@ Outputs:
 
 ```
 
-### Optionally can laucnh a cloud9 environment from aws cli 
+### Optionally can laucnh a cloud9 environment from aws cli
 
-### Configure ssh for the local machine 
-- Generate ssh private and public key 
+### Configure ssh for the local machine
+
+- Generate ssh private and public key
+
 ```
 ssh-keygen -b 4096 -C 'VS Code Remote SSH user' -t rsa
 ```
-select a name such as id_rsa_cloud9 
 
-- Copy the public key from the local machine 
+select a name such as id_rsa_cloud9
+
+- Copy the public key from the local machine
+
 ```
-cat ~/.ssh/id_rsa.pub 
+cat ~/.ssh/id_rsa.pub
 ```
-- Paste the key to authorized_keys in ec2 instance 
+
+- Paste the key to authorized_keys in ec2 instance
+
 ```
 echo 'key pub' >> authorized_keys
 ```
-- Download the ssm-proxy.sh and setup AWS_PROFILE, AWS_REGION 
+
+- Download the ssm-proxy.sh and setup AWS_PROFILE, AWS_REGION
+
 ```
 #!/bin/bash
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
@@ -106,20 +187,25 @@ else
     aws ssm start-session --target $HOST --document-name AWS-StartSSHSession --parameters portNumber=${PORT} --profile ${AWS_PROFILE} --region ${AWS_REGION}
 fi
 ```
-- Configure ssh config for the local machine 
+
+- Configure ssh config for the local machine
+
 ```
 Host cloud9
     IdentityFile ~/.ssh/id_rsa_cloud9
     User ec2-user
-    HostName i-0bf311ce929d7f91c 
+    HostName i-0bf311ce929d7f91c
     ProxyCommand sh -c "~/.ssh/ssm-proxy.sh %h %p"
 ```
-and 
+
+and
+
 ```
  chmod +x ~/.ssh/ssm-proxy.sh
 ```
 
-### Configure the cloud9 ec2 instance 
+### Configure the cloud9 ec2 instance
+
 ```
 # Save a copy of the script first
 $ sudo mv ~/.c9/stop-if-inactive.sh ~/.c9/stop-if-inactive.sh-SAVE
@@ -128,15 +214,29 @@ $ sudo chown root:root ~/.c9/stop-if-inactive.sh
 $ sudo chmod 755 ~/.c9/stop-if-inactive.sh
 ```
 
-### Configure SSH to clone repositories from GitHub 
+### Configure SSH to clone repositories from GitHub
+
 ```
 eval $(ssh-agent)
 ```
-then 
+
+then
+
 ```
-ssh-add id_rsa_git 
+ssh-add id_rsa_git
 ```
-git clone 
+
+git clone
+
 ```
 git clone git@github.com:entest-hai/aws-amplify-ui-nextjs.git
+```
+
+### Keep SSH alive
+
+configure ~/.ssh/config local machine
+
+```
+host your.remote.host
+  ServerAliveInterval 180
 ```
