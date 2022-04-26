@@ -164,3 +164,5 @@ If not, start the ec2 instance first
 ```
  aws ec2 start-instances --instance-ids $HOST --profile ${AWS_PROFILE} --region ${AWS_REGION}
 ```
+
+Configure SSM idle time [reference here](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-preferences-timeout.html)
