@@ -139,7 +139,7 @@ Host cloud9
 
 ```
 
-[the ssm-proxy script]()
+[the ssm-proxy script](https://github.com/aws-samples/cloud9-to-power-vscode-blog/blob/main/scripts/ssm-proxy.sh)
 the target information
 
 ```
