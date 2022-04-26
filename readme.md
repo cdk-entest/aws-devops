@@ -8,7 +8,7 @@ System manager enable remote access to EC2 instances without using SSH and openi
 
 - Remote access a prviate EC2 by system mananger
 - The private EC2 can access S3 via VPC endpoint
-- Deply by a CDK stack
+- Deploy by a CDK stack
 
 ## Architecture
 
@@ -110,4 +110,57 @@ Launch an EC2 in a private subnet
         }
       }
     )
+```
+
+## Use SSM connecting to EC2 in private VPC
+
+create a session
+
+```
+aws ssm start-session --target "i-026bb5f5caaf16aa1"
+```
+
+start a session using SSH which used in **ssh-proxy.sh**
+
+```
+ssh -i /path/my-key-pair.pem ec2-user@i-026bb5f5caaf16aa1
+```
+
+## How the ssm-proxy.sh script works with ssh config
+
+ssh config file
+
+```
+Host cloud9
+    IdentityFile ~/.ssh/id_rsa_cloud9
+    User ec2-user
+    HostName i-0bf311ce929d7f91c
+    ProxyCommand sh -c "~/.ssh/ssm-proxy.sh %h %p"
+
+```
+
+[the ssm-proxy script]()
+the target information
+
+```
+HOST=i-0bf311ce929d7f91c
+```
+
+check instance status
+
+```
+STATUS=`aws ssm describe-instance-information --filters Key=InstanceIds,Values=${HOST} --output text --query 'InstanceInformationList[0].PingStatus' --profile ${AWS_PROFILE} --region ${AWS_REGION}`
+```
+
+it will return **Online** if the instance is running. Then start the ssm session
+
+```
+ aws ssm start-session --target $HOST --document-name AWS-StartSSHSession --parameters portNumber=${PORT} --profile ${AWS_PROFILE} --region ${AWS_REGION}
+
+```
+
+If not, start the ec2 instance first
+
+```
+ aws ec2 start-instances --instance-ids $HOST --profile ${AWS_PROFILE} --region ${AWS_REGION}
 ```
