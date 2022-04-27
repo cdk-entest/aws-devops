@@ -7,6 +7,7 @@ There are some benefit when using Cloud9, here is the [aws blog vscode cloud9](h
 - Auto hibernate after 30 minutes idle
 - Auto turn on when open vscode
 - No open port
+![aws_devops-Expriment (1)](https://user-images.githubusercontent.com/20411077/165545940-4ddcdfb7-2d39-431c-a47f-288dc12a4e1e.jpg)
 
 ### CDK stack to create a cloud9 environment
 
