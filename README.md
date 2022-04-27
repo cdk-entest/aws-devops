@@ -1,194 +1,66 @@
-# Part I Setup SSM and SSH Tunnel to EC2 in Private VPC
-
-### Archiecture
+# Setup VSCode SSH with Cloud9 using CDK
 
 ### Summary
 
-- Connect to EC2 in a private subnet via SSM session
-- SSH to EC2 in a private subnet via SSM tunneling and proxyCommand
-- vscode ssh remote to EC2 in a private subnet
+There are some benefit when using Cloud9, here is the [aws blog vscode cloud9](https://aws.amazon.com/blogs/architecture/field-notes-use-aws-cloud9-to-power-your-visual-studio-code-ide/)
 
-### Setup for local machine
-
-Generate SSH key pair
-
-```
-ssh-keygen -b 4096 -C 'VS Code Remote SSH user' -t rsa
-
-```
-
-Configure ssh **config** file
-
-```
-Host ssm-private-ec2
-  IdentityFile ~/.ssh/id_rsa
-  HostName i-026bb5f5caaf16aa1
-  User ec2-user
-  ProxyCommand sh -c "~/.ssh/ssm-private-ec2-proxy.sh %h %p"
-  ServerAliveInterval 180
-```
-
-Configure the ssm-proxy file
-
-```
-#!/bin/bash
-
-AWS_PROFILE='entest'
-AWS_REGION='ap-southeast-1'
-MAX_ITERATION=5
-SLEEP_DURATION=5
-
-# Arguments passed from SSH client
-HOST=$1
-PORT=$2
-
-echo $HOST
-
-# Start ssm session
-aws ssm start-session --target $HOST --document-name AWS-StartSSHSession --parameters portNumber=${PORT} --profile ${AWS_PROFILE} --region ${AWS_REGION}
-
-```
-
-### Setup for the EC2 instance
-
-root password
-
-```
-sudo passwd ec2-user
-
-```
-
-check ssh running
-
-```
-ps aux | grep sshd
-```
-
-add the **id_rsa.pub** generated from the local machine
-
-```
-echo id_rsa_key >> authorized_keys
-```
-
-# Part II Setup VSCode SSH with Cloud9 and SSM
-
-**Hai Tran 25 APR 2022**
-
-- [Reference](https://aws.amazon.com/blogs/architecture/field-notes-use-aws-cloud9-to-power-your-visual-studio-code-ide/)
 - Auto hibernate after 30 minutes idle
 - Auto turn on when open vscode
 - No open port
 
-### Architecture
+### CDK stack to create a cloud9 environment
 
-### Install remote ssh extension for vscode
-
-### CloudFormation to launch a cloud9 environment with SSM connect
+There are multiple way to launch a cloud9 such as AWS console, CLI, CloudFormation, I go with a CDK stack as below.
 
 ```
-AWSTemplateFormatVersion: "2010-09-09"
+import { aws_cloud9, Stack, StackProps } from 'aws-cdk-lib';
+import { Construct } from 'constructs';
 
-Description: >
-  Creates an AWS Cloud9 EC2 environment within the default VPC with
-  a no-ingress EC2 instance. This is to be used in conjunction with
-  Visual Studio Code and the Remote SSH extension. This relies on
-  AWS Systems Manager in order to run properly.
+export class Cloud9CdkStack extends Stack {
+  constructor(scope: Construct, id: string, props?: StackProps) {
+    super(scope, id, props);
 
-Resources:
-  DefaultVPCCloud9Instance:
-    Type: AWS::Cloud9::EnvironmentEC2
-    Properties:
-      InstanceType: t3.large
-      ConnectionType: CONNECT_SSM
-      Description: Cloud9 instance for use with VS Code Remote SSH
-      Name: VS Code Remote SSH Demo
+    // cloud9 environment
+    const cloud9 = new aws_cloud9.CfnEnvironmentEC2(
+      this,
+      'CdkCloud9Example',
+      {
+        automaticStopTimeMinutes: 30,
+        instanceType: 't2.large',
+        name: 'CdkCloud9Example',
+        connectionType: 'CONNECT_SSM',
+        ownerArn: `arn:aws:iam::${this.account}:user/YOUR_IAM_USER_NAME`
+      }
+    )
 
-Outputs:
-  Cloud9Instance:
-    Description: The EC2 instance powering this AWS CLoud9 environment
-    Value: !Join
-      - ""
-      - - "https://"
-        - !Ref AWS::Region
-        - ".console.aws.amazon.com/ec2/v2/home?region="
-        - !Ref AWS::Region
-        - "#Instances:search="
-        - !Ref DefaultVPCCloud9Instance
-        - ";sort=tag:Name"
+    // access the ec2 and attach volume
+
+  }
+}
 
 ```
-
-### Optionally can laucnh a cloud9 environment from aws cli
 
 ### Configure ssh for the local machine
 
-- Generate ssh private and public key
+Generate ssh private and public key
 
 ```
 ssh-keygen -b 4096 -C 'VS Code Remote SSH user' -t rsa
 ```
 
-select a name such as id_rsa_cloud9
-
-- Copy the public key from the local machine
+Copy the public key from the local machine
 
 ```
 cat ~/.ssh/id_rsa.pub
 ```
 
-- Paste the key to authorized_keys in ec2 instance
+Paste the key to authorized_keys in ec2 instance
 
 ```
 echo 'key pub' >> authorized_keys
 ```
 
-- Download the ssm-proxy.sh and setup AWS_PROFILE, AWS_REGION
-
-```
-#!/bin/bash
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: MIT-0
-
-# Configuration
-# Change these values to reflect your environment
-AWS_PROFILE='cloud9'
-AWS_REGION='us-east-1'
-MAX_ITERATION=5
-SLEEP_DURATION=5
-
-# Arguments passed from SSH client
-HOST=$1
-PORT=$2
-
-STATUS=`aws ssm describe-instance-information --filters Key=InstanceIds,Values=${HOST} --output text --query 'InstanceInformationList[0].PingStatus' --profile ${AWS_PROFILE} --region ${AWS_REGION}`
-
-# If the instance is online, start the session
-if [ $STATUS == 'Online' ]; then
-    aws ssm start-session --target $HOST --document-name AWS-StartSSHSession --parameters portNumber=${PORT} --profile ${AWS_PROFILE} --region ${AWS_REGION}
-else
-    # Instance is offline - start the instance
-    aws ec2 start-instances --instance-ids $HOST --profile ${AWS_PROFILE} --region ${AWS_REGION}
-    sleep ${SLEEP_DURATION}
-    COUNT=0
-    while [ ${COUNT} -le ${MAX_ITERATION} ]; do
-        STATUS=`aws ssm describe-instance-information --filters Key=InstanceIds,Values=${HOST} --output text --query 'InstanceInformationList[0].PingStatus' --profile ${AWS_PROFILE} --region ${AWS_REGION}`
-        if [ ${STATUS} == 'Online' ]; then
-            break
-        fi
-        # Max attempts reached, exit
-        if [ ${COUNT} -eq ${MAX_ITERATION} ]; then
-            exit 1
-        else
-            let COUNT=COUNT+1
-            sleep ${SLEEP_DURATION}
-        fi
-    done
-    # Instance is online now - start the session
-    aws ssm start-session --target $HOST --document-name AWS-StartSSHSession --parameters portNumber=${PORT} --profile ${AWS_PROFILE} --region ${AWS_REGION}
-fi
-```
-
-- Configure ssh config for the local machine
+Configure ssh config for the local machine
 
 ```
 Host cloud9
@@ -198,45 +70,12 @@ Host cloud9
     ProxyCommand sh -c "~/.ssh/ssm-proxy.sh %h %p"
 ```
 
-and
+Download the [ssm-proxy script from here](https://github.com/aws-samples/cloud9-to-power-vscode-blog/blob/main/scripts/ssm-proxy.sh).It will check it the Cloud9-EC2 is running or not.
+
+- If the EC2 running, it starts a ssm session and ssh tunnel via the session.
+
+- If the EC2 is stopped, it will start the instance first, then start the ssm session and tunnel ssh.
 
 ```
  chmod +x ~/.ssh/ssm-proxy.sh
-```
-
-### Configure the cloud9 ec2 instance
-
-```
-# Save a copy of the script first
-$ sudo mv ~/.c9/stop-if-inactive.sh ~/.c9/stop-if-inactive.sh-SAVE
-$ curl https://raw.githubusercontent.com/aws-samples/cloud9-to-power-vscode-blog/main/scripts/stop-if-inactive.sh -o ~/.c9/stop-if-inactive.sh
-$ sudo chown root:root ~/.c9/stop-if-inactive.sh
-$ sudo chmod 755 ~/.c9/stop-if-inactive.sh
-```
-
-### Configure SSH to clone repositories from GitHub
-
-```
-eval $(ssh-agent)
-```
-
-then
-
-```
-ssh-add id_rsa_git
-```
-
-git clone
-
-```
-git clone git@github.com:entest-hai/aws-amplify-ui-nextjs.git
-```
-
-### Keep SSH alive
-
-configure ~/.ssh/config local machine
-
-```
-host your.remote.host
-  ServerAliveInterval 180
 ```
