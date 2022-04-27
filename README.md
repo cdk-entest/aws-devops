@@ -67,7 +67,7 @@ Configure ssh config for the local machine
 Host cloud9
     IdentityFile ~/.ssh/id_rsa_cloud9
     User ec2-user
-    HostName i-0bf311ce929d7f91c
+    HostName INSTANCE_id
     ProxyCommand sh -c "~/.ssh/ssm-proxy.sh %h %p"
 ```
 
