@@ -1,6 +1,13 @@
 # Deploy Lambda Based APIs by CDK 
 **29 JAN 2022 Hai Tran**
-## 1. Deploy a lambda function by files 
+
+## Architecture 
+
+
+![aws_devops-LambdaApiStack](https://user-images.githubusercontent.com/20411077/167135976-8daebfcd-4ae2-4cab-9011-2009c0c007aa.jpg)
+
+
+## Deploy a lambda function by files 
 install dependencies 
 ```
 python -m pip install --target path-to-lambda numpy 
@@ -17,7 +24,7 @@ handler_file = aws_lambda.Function(
             timeout=Duration.seconds(90)
         )
 ```
-## 2. Deploy a lambda function by ecr image 
+## Deploy a lambda function by ecr image 
 project structure 
 ```
 - aws_devops
@@ -41,7 +48,7 @@ handler_ecr = aws_lambda.Function(
             timeout=Duration.seconds(90)
         )
 ```
-## 3. Integrate an API Gateway with multiple lambdas
+## Integrate an API Gateway with multiple lambdas
 create an api gateway 
 ```
 api_gw = aws_apigateway.RestApi(
